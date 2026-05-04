@@ -59,6 +59,7 @@ export async function POST(req: NextRequest) {
     const userCart = await findOrCreateCart(token);
 
     const data = (await req.json()) as CreateCartItemValues;
+    const ingredientIds = data.ingredients ?? [];
 
     const findCartItem = await prisma.cartItem.findFirst({
       where: {
@@ -66,7 +67,7 @@ export async function POST(req: NextRequest) {
         productItemId: data.productItemId,
         ingredients: {
           every: {
-            id: { in: data.ingredients },
+            id: { in: ingredientIds },
           },
         },
       },
@@ -83,14 +84,20 @@ export async function POST(req: NextRequest) {
         },
       });
     } else {
-      await prisma.cartItem.create({
+      // Split the create + M2M ingredient connect: the Neon HTTP driver
+      // adapter does not support interactive transactions, which Prisma
+      // would otherwise wrap around a nested-relation write.
+      const created = await prisma.cartItem.create({
         data: {
           cartId: userCart.id,
           productItemId: data.productItemId,
           quantity: 1,
-          ingredients: { connect: data.ingredients?.map((id) => ({ id })) },
         },
       });
+
+      for (const ingredientId of ingredientIds) {
+        await prisma.$executeRaw`INSERT INTO "_CartItemToIngredient" ("A", "B") VALUES (${created.id}, ${ingredientId})`;
+      }
     }
 
     const updatedUserCart = await updateCartTotalAmount(token);

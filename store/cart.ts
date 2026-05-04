@@ -81,6 +81,7 @@ export const useCartStore = create<CartState>((set) => ({
     } catch (error) {
       console.error(error);
       set({ error: true });
+      throw error;
     } finally {
       set({ loading: false });
     }
