@@ -27,6 +27,9 @@ interface ReturnProps extends Filters {
   setIngredients: (value: string) => void;
 }
 
+const parseParamSet = (value?: string | null) =>
+  new Set<string>(value?.split(',').filter(Boolean) ?? []);
+
 export const useFilters = (): ReturnProps => {
   const searchParams = useSearchParams() as unknown as Map<
     keyof QueryFilters,
@@ -34,21 +37,15 @@ export const useFilters = (): ReturnProps => {
   >;
 
   const [selectedIngredients, { toggle: toggleIngredients }] = useSet(
-    new Set<string>(searchParams.get('ingredients')?.split(','))
+    parseParamSet(searchParams.get('ingredients'))
   );
 
   const [sizes, { toggle: toggleSizes }] = useSet(
-    new Set<string>(
-      searchParams.has('sizes') ? searchParams.get('sizes')?.split(',') : []
-    )
+    parseParamSet(searchParams.get('sizes'))
   );
 
   const [pizzaTypes, { toggle: togglePizzaTypes }] = useSet(
-    new Set<string>(
-      searchParams.has('pizzaTypes')
-        ? searchParams.get('pizzaTypes')?.split(',')
-        : []
-    )
+    parseParamSet(searchParams.get('pizzaTypes'))
   );
 
   const [prices, setPrices] = React.useState<PriceProps>({

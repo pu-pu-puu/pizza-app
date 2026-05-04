@@ -12,6 +12,9 @@ interface Props {
 
 export const Categories: React.FC<Props> = ({ className, items }) => {
   const categoryActiveId = useCategoryStore((state) => state.activeId);
+  const setActiveCategoryIdFromClick = useCategoryStore(
+    (state) => state.setActiveIdFromClick
+  );
 
   return (
     <div
@@ -26,8 +29,9 @@ export const Categories: React.FC<Props> = ({ className, items }) => {
           )}
           key={id}
           href={`/#${name}`}
+          onClick={() => setActiveCategoryIdFromClick(id)}
         >
-          <button>{name}</button>
+          <span>{name}</span>
         </a>
       ))}
     </div>

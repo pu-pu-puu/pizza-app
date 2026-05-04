@@ -10,7 +10,7 @@ import { PizzaSize, PizzaType, pizzaTypes } from '@/constants/pizza';
 import { Ingredient, ProductItem } from '@prisma/client';
 import { IngredientItem } from './ingredient-item';
 import { usePizzaOptions } from '@/hooks';
-import { getPizzaDetails } from '@/lib';
+import { getPizzaDetails } from '@/lib/get-pizza-details';
 
 interface Props {
   items: ProductItem[];

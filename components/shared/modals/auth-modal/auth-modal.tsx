@@ -1,6 +1,11 @@
 'use client';
 
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { signIn } from 'next-auth/react';
 import React from 'react';
 import { LoginForm } from './forms/login-form';
@@ -26,6 +31,12 @@ export const AuthModal: React.FC<Props> = ({ open, onClose }) => {
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className='w-[450px] bg-white p-10'>
+        <DialogTitle className='sr-only'>
+          {type === 'login' ? 'Вход' : 'Регистрация'}
+        </DialogTitle>
+        <DialogDescription className='sr-only'>
+          Войдите в аккаунт или создайте новый профиль.
+        </DialogDescription>
         {type === 'login' ? (
           <LoginForm onClose={handleClose} />
         ) : (

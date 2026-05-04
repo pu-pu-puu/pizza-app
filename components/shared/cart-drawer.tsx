@@ -7,6 +7,7 @@ import {
   Sheet,
   SheetClose,
   SheetContent,
+  SheetDescription,
   SheetFooter,
   SheetHeader,
   SheetTitle,
@@ -40,6 +41,13 @@ export const CartDrawer: React.FC<React.PropsWithChildren> = ({ children }) => {
       <SheetTrigger asChild>{children}</SheetTrigger>
 
       <SheetContent className='flex flex-col justify-between pb-0 bg-[#F4F1EE]'>
+        {!totalAmount && (
+          <SheetTitle className='sr-only'>Корзина</SheetTitle>
+        )}
+        <SheetDescription className='sr-only'>
+          Просмотр товаров в корзине и переход к оформлению заказа.
+        </SheetDescription>
+
         <div
           className={cn(
             'flex flex-col h-full',
@@ -72,7 +80,7 @@ export const CartDrawer: React.FC<React.PropsWithChildren> = ({ children }) => {
                 Добавьте хотя бы одну пиццу, чтобы совершить заказ
               </p>
 
-              <SheetClose>
+              <SheetClose asChild>
                 <Button className='w-56 h-12 text-base' size='lg'>
                   <ArrowLeft className='w-5 mr-2' />
                   Вернуться назад

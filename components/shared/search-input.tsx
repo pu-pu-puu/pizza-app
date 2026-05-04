@@ -16,19 +16,30 @@ export const SearchInput: React.FC<Props> = ({ className }) => {
   const [focused, setFocused] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [products, setProducts] = React.useState<Product[]>([]);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  const fetchProducts = React.useCallback((query: string) => {
+    Api.products.search(query).then((items) => setProducts(items));
+  }, []);
 
   useDebounce(
     () => {
-      Api.products.search(searchQuery).then((items) => setProducts(items));
+      fetchProducts(searchQuery);
     },
     300,
-    [searchQuery]
+    [fetchProducts, searchQuery]
   );
+
+  const openSearch = () => {
+    setFocused(true);
+    fetchProducts(searchQuery);
+  };
 
   const onClickItem = () => {
     setFocused(false);
     setSearchQuery('');
     setProducts([]);
+    inputRef.current?.blur();
   };
 
   return (
@@ -48,10 +59,12 @@ export const SearchInput: React.FC<Props> = ({ className }) => {
       >
         <Search className='absolute top-1/2 left-3 translate-y-[-50%] text-gray-400' />
         <input
+          ref={inputRef}
           className='rounded-2xl outline-none w-full bg-gray-100 pl-11'
           type='text'
           placeholder='Найти пиццу...'
-          onFocus={() => setFocused(true)}
+          onFocus={openSearch}
+          onClick={openSearch}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
         />
@@ -68,6 +81,7 @@ export const SearchInput: React.FC<Props> = ({ className }) => {
                 onClick={onClickItem}
                 className='flex items-center gap-3 w-full px-3 py-2 hover:bg-primary/10'
                 href={`/product/${product.id}`}
+                scroll={false}
                 key={product.id}
               >
                 <img

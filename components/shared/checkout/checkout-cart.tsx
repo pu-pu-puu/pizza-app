@@ -1,7 +1,7 @@
 import React from 'react';
 import { WhiteBlock } from '../white-block';
 import { CheckoutItem } from '../checkout-item';
-import { getCartItemDetails } from '@/lib';
+import { getCartItemDetails } from '@/lib/get-cart-item-details';
 import { PizzaSize, PizzaType } from '@/constants/pizza';
 import { CartStateItem } from '@/lib/get-cart-details';
 import { CheckoutItemSkeleton } from '../checkout-item-skeleton';

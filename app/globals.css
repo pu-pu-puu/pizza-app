@@ -66,6 +66,15 @@ html {
   background: #dbdadd;
 }
 
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 @layer utilities {
   .text-balance {
     text-wrap: balance;
@@ -91,4 +100,17 @@ html {
 
 #nprogress .spinner-icon {
   @apply border-t-primary border-l-primary !important;
+}
+
+@keyframes story-progress {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+.story-progress-animation {
+  animation: story-progress 4.5s linear forwards;
 }

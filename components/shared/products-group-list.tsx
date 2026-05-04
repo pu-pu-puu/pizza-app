@@ -26,17 +26,19 @@ export const ProductsGroupList: React.FC<Props> = ({
   const setActiveCategoryId = useCategoryStore((state) => state.setActiveId);
   const intersectionRef = React.useRef(null);
   const intersection = useIntersection(intersectionRef, {
-    threshold: 0.4,
+    rootMargin: '-160px 0px -70% 0px',
+    threshold: 0,
   });
 
   React.useEffect(() => {
     if (intersection?.isIntersecting) {
       setActiveCategoryId(categoryId);
     }
-  }, [categoryId, intersection?.isIntersecting, title]);
+  }, [categoryId, intersection?.isIntersecting, setActiveCategoryId]);
 
   return (
-    <div className={cn('mt-10', className)} id={title} ref={intersectionRef}>
+    <div className={cn('mt-10 scroll-mt-28', className)} id={title}>
+      <div ref={intersectionRef} className='h-px' />
       <Title text={title} size='lg' className='font-extrabold mb-5' />
 
       <div className={cn('grid grid-cols-3 gap-[50px]', listClassName)}>

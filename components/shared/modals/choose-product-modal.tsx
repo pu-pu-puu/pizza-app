@@ -1,6 +1,11 @@
 'use client';
 
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import React from 'react';
 import { useRouter } from 'next/navigation';
@@ -23,6 +28,10 @@ export const ChooseProductModal: React.FC<Props> = ({ product, className }) => {
           className
         )}
       >
+        <DialogTitle className='sr-only'>Выбор продукта</DialogTitle>
+        <DialogDescription className='sr-only'>
+          Настройте параметры продукта перед добавлением в корзину.
+        </DialogDescription>
         <ProductForm product={product} onSubmit={() => router.back()} />
       </DialogContent>
     </Dialog>

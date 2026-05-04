@@ -18,13 +18,18 @@ export const useQueryFilters = (filters: Filters) => {
 
       const query = qs.stringify(params, {
         arrayFormat: 'comma',
+        skipNulls: true,
+        filter: (_prefix, value) => {
+          if (Array.isArray(value) && value.length === 0) return;
+          if (value === undefined || value === '') return;
+
+          return value;
+        },
       });
 
-      router.push(`?${query}`, {
+      router.push(query ? `?${query}` : '/', {
         scroll: false,
       });
-
-      console.log(filters, 999);
     }
 
     isMounted.current = true;
