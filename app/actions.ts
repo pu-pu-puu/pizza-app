@@ -19,6 +19,18 @@ export async function createOrder(data: CheckoutFormValues) {
       throw new Error('Cart token not found');
     }
 
+    /* Требуем подтверждённый телефон у текущего юзера */
+    const sessionUser = await getUserSession();
+    if (!sessionUser) {
+      throw new Error('Не авторизован');
+    }
+    const fullUser = await prisma.user.findUnique({
+      where: { id: Number(sessionUser.id) },
+    });
+    if (!fullUser?.phoneVerified) {
+      throw new Error('Телефон не подтверждён');
+    }
+
     /* Находим корзину по токену */
     const userCart = await prisma.cart.findFirst({
       include: {
@@ -53,9 +65,10 @@ export async function createOrder(data: CheckoutFormValues) {
     const order = await prisma.order.create({
       data: {
         token: cartToken,
+        userId: fullUser.id,
         fullName: data.firstName + ' ' + data.lastName,
         email: data.email,
-        phone: data.phone,
+        phone: fullUser.phone ?? data.phone,
         address: data.address,
         comment: data.comment,
         totalAmount: userCart.totalAmount,

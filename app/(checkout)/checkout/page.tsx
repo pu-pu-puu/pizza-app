@@ -6,6 +6,7 @@ import {
   CheckoutCart,
   CheckoutPersonalForm,
 } from '@/components/shared/checkout';
+import { OtpModal } from '@/components/shared/modals';
 import { checkoutFormSchema, CheckoutFormValues } from '@/constants';
 import { useCart } from '@/hooks';
 import { FormProvider, useForm } from 'react-hook-form';
@@ -15,12 +16,19 @@ import { createOrder } from '@/app/actions';
 import toast from 'react-hot-toast';
 import { useSession } from 'next-auth/react';
 import { Api } from '@/services/api-client';
+import { normalizeRuPhone } from '@/lib/phone';
 
 export default function CheckoutPage() {
   const [submitting, setSubmitting] = React.useState(false);
+  const [otpOpen, setOtpOpen] = React.useState(false);
+  const [pendingPhone, setPendingPhone] = React.useState<string>('');
+  // Tracks phones the user has already verified during this checkout flow.
+  // Once a phone is in this set we skip the OTP step on subsequent submits.
+  const verifiedPhonesRef = React.useRef<Set<string>>(new Set());
+
   const { totalAmount, updateItemQuantity, items, removeCartItem, loading } =
     useCart();
-  const { data: session } = useSession();
+  const { data: session, update: updateSession } = useSession();
 
   const form = useForm<CheckoutFormValues>({
     resolver: zodResolver(checkoutFormSchema),
@@ -37,11 +45,18 @@ export default function CheckoutPage() {
   React.useEffect(() => {
     async function fetchUserInfo() {
       const data = await Api.auth.getMe();
-      const [firstName, lastName] = data.fullName.split(' ');
+      const [firstName, lastName] = (data.fullName || '').split(' ');
 
-      form.setValue('firstName', firstName);
-      form.setValue('lastName', lastName);
-      form.setValue('email', data.email);
+      if (firstName) form.setValue('firstName', firstName);
+      if (lastName) form.setValue('lastName', lastName);
+      if (data.email) form.setValue('email', data.email);
+      if (data.phone) {
+        const stored = normalizeRuPhone(data.phone) ?? data.phone;
+        form.setValue('phone', stored);
+        if (data.phoneVerified) {
+          verifiedPhonesRef.current.add(stored);
+        }
+      }
     }
 
     if (session) {
@@ -58,26 +73,52 @@ export default function CheckoutPage() {
     updateItemQuantity(id, newQuantity);
   };
 
-  const onSubmit = async (data: CheckoutFormValues) => {
+  const submitOrder = async (data: CheckoutFormValues) => {
     try {
       setSubmitting(true);
-
       const url = await createOrder(data);
 
-      toast.error('Заказ успешно оформлен! 📝 Переход на оплату... ', {
-        icon: '✅',
-      });
+      toast.success('Заказ оформлен, переходим к оплате', { icon: '✅' });
 
       if (url) {
         location.href = url;
+      } else {
+        setSubmitting(false);
       }
     } catch (err) {
       console.log(err);
       setSubmitting(false);
-      toast.error('Не удалось создать заказ', {
-        icon: '❌',
-      });
+      toast.error('Не удалось создать заказ', { icon: '❌' });
     }
+  };
+
+  const onSubmit = async (data: CheckoutFormValues) => {
+    const normalized = normalizeRuPhone(data.phone);
+    if (!normalized) {
+      toast.error('Введите корректный номер телефона', { icon: '❌' });
+      return;
+    }
+
+    // Per-phone, not per-user: a user with a verified phone must still
+    // re-verify if they type a *different* phone in the form. The ref is
+    // seeded from the user's own verified phone on mount, so the legit
+    // "same verified phone" case is already covered.
+    if (verifiedPhonesRef.current.has(normalized)) {
+      await submitOrder({ ...data, phone: normalized });
+      return;
+    }
+
+    setPendingPhone(normalized);
+    setOtpOpen(true);
+  };
+
+  const handleOtpVerified = async () => {
+    setOtpOpen(false);
+    verifiedPhonesRef.current.add(pendingPhone);
+    await updateSession();
+
+    const values = form.getValues();
+    await submitOrder({ ...values, phone: pendingPhone });
   };
 
   return (
@@ -118,6 +159,13 @@ export default function CheckoutPage() {
           </div>
         </form>
       </FormProvider>
+
+      <OtpModal
+        open={otpOpen}
+        phone={pendingPhone}
+        onClose={() => setOtpOpen(false)}
+        onVerified={handleOtpVerified}
+      />
     </Container>
   );
 }
