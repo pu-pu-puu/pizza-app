@@ -114,19 +114,28 @@ export async function createOrder(data: CheckoutFormValues) {
 
     const paymentUrl = paymentData.confirmation.confirmation_url;
 
-    await sendEmail(
-      data.email,
-      'Next Pizza / Оплатите заказ #' + order.id,
-      PayOrderTemplate({
-        orderId: order.id,
-        totalAmount: order.totalAmount,
-        paymentUrl,
-      })
-    );
+    // The receipt email is a nice-to-have, not a payment-blocker. If Resend
+    // refuses the send (e.g. free `onboarding@resend.dev` from-address can
+    // only deliver to the API-key owner's own inbox, or the configured
+    // domain is not yet verified) we still want the user to reach YooKassa.
+    try {
+      await sendEmail(
+        data.email,
+        'Next Pizza / Оплатите заказ #' + order.id,
+        PayOrderTemplate({
+          orderId: order.id,
+          totalAmount: order.totalAmount,
+          paymentUrl,
+        })
+      );
+    } catch (emailErr) {
+      console.log('[CreateOrder] sendEmail failed (non-fatal)', emailErr);
+    }
 
     return paymentUrl;
   } catch (err) {
     console.log('[CreateOrder] Server error', err);
+    throw err;
   }
 }
 
