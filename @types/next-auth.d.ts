@@ -11,6 +11,7 @@ declare module 'next-auth' {
       role: UserRole;
       name: string;
       image: string;
+      phoneVerified: boolean;
     };
   }
 
@@ -24,5 +25,6 @@ declare module 'next-auth/jwt' {
   interface JWT extends DefaultJWT {
     id: string;
     role: UserRole;
+    phoneVerified: boolean;
   }
 }

@@ -6,6 +6,7 @@ import GoogleProvider from 'next-auth/providers/google';
 import { prisma } from '@/prisma/prisma-client';
 import { compare, hashSync } from 'bcrypt';
 import { UserRole } from '@prisma/client';
+import { findOrCreateUserByPhone, verifyOtpCore } from '@/lib/otp';
 
 export const authOptions: AuthOptions = {
   providers: [
@@ -70,6 +71,33 @@ export const authOptions: AuthOptions = {
         };
       },
     }),
+    CredentialsProvider({
+      id: 'phone-otp',
+      name: 'Phone OTP',
+      credentials: {
+        phone: { label: 'Phone', type: 'text' },
+        code: { label: 'Code', type: 'text' },
+      },
+      async authorize(credentials) {
+        if (!credentials?.phone || !credentials?.code) {
+          return null;
+        }
+
+        const result = await verifyOtpCore(credentials.phone, credentials.code);
+        if (!result.ok) {
+          return null;
+        }
+
+        const user = await findOrCreateUserByPhone(result.phone);
+
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.fullName,
+          role: user.role,
+        };
+      },
+    }),
   ],
   secret: process.env.NEXTAUTH_SECRET,
   session: {
@@ -78,7 +106,10 @@ export const authOptions: AuthOptions = {
   callbacks: {
     async signIn({ user, account }) {
       try {
-        if (account?.provider === 'credentials') {
+        if (
+          account?.provider === 'credentials' ||
+          account?.provider === 'phone-otp'
+        ) {
           return true;
         }
 
@@ -145,6 +176,7 @@ export const authOptions: AuthOptions = {
         token.email = findUser.email;
         token.fullName = findUser.fullName;
         token.role = findUser.role;
+        token.phoneVerified = !!findUser.phoneVerified;
       }
 
       return token;
@@ -153,6 +185,7 @@ export const authOptions: AuthOptions = {
       if (session?.user) {
         session.user.id = token.id;
         session.user.role = token.role;
+        session.user.phoneVerified = !!token.phoneVerified;
       }
 
       return session;
