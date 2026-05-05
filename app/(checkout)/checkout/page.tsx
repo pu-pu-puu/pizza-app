@@ -51,9 +51,10 @@ export default function CheckoutPage() {
       if (lastName) form.setValue('lastName', lastName);
       if (data.email) form.setValue('email', data.email);
       if (data.phone) {
-        form.setValue('phone', data.phone);
+        const stored = normalizeRuPhone(data.phone) ?? data.phone;
+        form.setValue('phone', stored);
         if (data.phoneVerified) {
-          verifiedPhonesRef.current.add(data.phone);
+          verifiedPhonesRef.current.add(stored);
         }
       }
     }
@@ -98,11 +99,11 @@ export default function CheckoutPage() {
       return;
     }
 
-    const alreadyVerified =
-      verifiedPhonesRef.current.has(normalized) ||
-      (session?.user.phoneVerified === true);
-
-    if (alreadyVerified) {
+    // Per-phone, not per-user: a user with a verified phone must still
+    // re-verify if they type a *different* phone in the form. The ref is
+    // seeded from the user's own verified phone on mount, so the legit
+    // "same verified phone" case is already covered.
+    if (verifiedPhonesRef.current.has(normalized)) {
       await submitOrder({ ...data, phone: normalized });
       return;
     }
