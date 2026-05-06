@@ -3,6 +3,7 @@ import axios from 'axios';
 
 interface Props {
   description: string;
+  idempotenceKey: string;
   orderId: number;
   amount: number;
 }
@@ -32,7 +33,7 @@ export async function createPayment(details: Props) {
       },
       headers: {
         'Content-Type': 'application/json',
-        'Idempotence-Key': Math.random().toString(36).substring(7),
+        'Idempotence-Key': details.idempotenceKey,
       },
     },
   );
