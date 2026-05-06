@@ -29,6 +29,7 @@ export default function CheckoutPage() {
   const { totalAmount, updateItemQuantity, items, removeCartItem, loading } =
     useCart();
   const { data: session, update: updateSession } = useSession();
+  const isCartEmpty = !loading && items.length === 0;
 
   const form = useForm<CheckoutFormValues>({
     resolver: zodResolver(checkoutFormSchema),
@@ -93,6 +94,11 @@ export default function CheckoutPage() {
   };
 
   const onSubmit = async (data: CheckoutFormValues) => {
+    if (isCartEmpty) {
+      toast.error('Добавьте товары в корзину перед оплатой', { icon: '❌' });
+      return;
+    }
+
     const normalized = normalizeRuPhone(data.phone);
     if (!normalized) {
       toast.error('Введите корректный номер телефона', { icon: '❌' });
@@ -141,11 +147,15 @@ export default function CheckoutPage() {
               />
 
               <CheckoutPersonalForm
-                className={loading ? 'opacity-40 pointer-events-none' : ''}
+                className={
+                  loading || isCartEmpty ? 'opacity-40 pointer-events-none' : ''
+                }
               />
 
               <CheckoutAddressForm
-                className={loading ? 'opacity-40 pointer-events-none' : ''}
+                className={
+                  loading || isCartEmpty ? 'opacity-40 pointer-events-none' : ''
+                }
               />
             </div>
 
@@ -154,6 +164,7 @@ export default function CheckoutPage() {
               <CheckoutSidebar
                 totalAmount={totalAmount}
                 loading={loading || submitting}
+                disabled={isCartEmpty || submitting}
               />
             </div>
           </div>

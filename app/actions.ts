@@ -57,7 +57,7 @@ export async function createOrder(data: CheckoutFormValues) {
     }
 
     /* Если корзина пустая возращаем ошибку */
-    if (userCart?.totalAmount === 0) {
+    if (userCart.items.length === 0 || userCart.totalAmount <= 0) {
       throw new Error('Cart is empty');
     }
 
@@ -77,24 +77,9 @@ export async function createOrder(data: CheckoutFormValues) {
       },
     });
 
-    /* Очищаем корзину */
-    await prisma.cart.update({
-      where: {
-        id: userCart.id,
-      },
-      data: {
-        totalAmount: 0,
-      },
-    });
-
-    await prisma.cartItem.deleteMany({
-      where: {
-        cartId: userCart.id,
-      },
-    });
-
     const paymentData = await createPayment({
       amount: order.totalAmount,
+      idempotenceKey: `order-${order.id}`,
       orderId: order.id,
       description: 'Оплата заказа #' + order.id,
     });
@@ -109,6 +94,22 @@ export async function createOrder(data: CheckoutFormValues) {
       },
       data: {
         paymentId: paymentData.id,
+      },
+    });
+
+    /* Очищаем корзину */
+    await prisma.cart.update({
+      where: {
+        id: userCart.id,
+      },
+      data: {
+        totalAmount: 0,
+      },
+    });
+
+    await prisma.cartItem.deleteMany({
+      where: {
+        cartId: userCart.id,
       },
     });
 

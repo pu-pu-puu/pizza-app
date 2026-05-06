@@ -11,16 +11,19 @@ const DELIVERY_PRICE = 250;
 interface Props {
   totalAmount: number;
   loading?: boolean;
+  disabled?: boolean;
   className?: string;
 }
 
 export const CheckoutSidebar: React.FC<Props> = ({
   totalAmount,
   loading,
+  disabled,
   className,
 }) => {
   const vatPrice = (totalAmount * VAT) / 100;
-  const totalPrice = totalAmount + DELIVERY_PRICE + vatPrice;
+  const deliveryPrice = totalAmount > 0 ? DELIVERY_PRICE : 0;
+  const totalPrice = totalAmount + deliveryPrice + vatPrice;
 
   return (
     <WhiteBlock className={cn('p-6 sticky top-4', className)}>
@@ -76,13 +79,14 @@ export const CheckoutSidebar: React.FC<Props> = ({
           loading ? (
             <Skeleton className='h-6 w-16 rounded-[6px]' />
           ) : (
-            `${DELIVERY_PRICE} ₽`
+            `${deliveryPrice} ₽`
           )
         }
       />
 
       <Button
         loading={loading}
+        disabled={disabled}
         type='submit'
         className='w-full h-14 rounded-2xl mt-6 text-base font-bold'
       >
