@@ -44,7 +44,8 @@ export const AdressInput: React.FC<Props> = ({
       onChange={(data) => onChange?.(data?.value)}
       inputProps={{
         onBlur,
-        onChange: (event) => onChange?.(event.target.value),
+        onChange: (event: React.ChangeEvent<HTMLInputElement>) =>
+          onChange?.(event.target.value),
         placeholder,
       }}
     />
