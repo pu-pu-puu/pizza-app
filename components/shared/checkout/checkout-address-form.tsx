@@ -22,7 +22,11 @@ export const CheckoutAddressForm: React.FC<Props> = ({ className }) => {
           name='address'
           render={({ field, fieldState }) => (
             <>
-              <AdressInput onChange={field.onChange} />
+              <AdressInput
+                value={field.value}
+                onBlur={field.onBlur}
+                onChange={field.onChange}
+              />
               {fieldState.error?.message && (
                 <ErrorText text={fieldState.error.message} />
               )}

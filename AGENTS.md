@@ -52,6 +52,7 @@ Local dev expects a `.env` at the repo root (gitignored). Required keys:
 - `RESEND_API_KEY`
 - `YOOKASSA_STORE_ID`, `YOOKASSA_API_KEY`, `YOOKASSA_CALLBACK_URL`
 - `GITHUB_ID`, `GITHUB_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+- `NEXT_PUBLIC_DADATA_TOKEN` (public DaData suggestions token; configure domain restrictions in DaData)
 - `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME`, `NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET` (image uploads — used by admin, mirrored here for parity)
 
 ## Conventions
