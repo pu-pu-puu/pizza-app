@@ -3,12 +3,14 @@
 import { prisma } from '@/prisma/prisma-client';
 import { VerificationUserTemplate } from '@/components/shared/email-temapltes/verification-user';
 import { CheckoutFormValues } from '@/constants';
-import { createPayment, sendEmail } from '@/lib';
+import { createPayment, getPayment, sendEmail } from '@/lib';
 import { OrderStatus, Prisma } from '@prisma/client';
 import { hashSync } from 'bcrypt';
 import { cookies } from 'next/headers';
 import { PayOrderTemplate } from '@/components/shared';
 import { getUserSession } from '@/lib/get-user-session';
+
+const PENDING_PAYMENT_LOOKBACK_HOURS = 24;
 
 export async function createOrder(data: CheckoutFormValues) {
   try {
@@ -61,7 +63,59 @@ export async function createOrder(data: CheckoutFormValues) {
       throw new Error('Cart is empty');
     }
 
-    /* Создаем заказ */
+    const pendingOrder = await prisma.order.findFirst({
+      where: {
+        userId: fullUser.id,
+        status: OrderStatus.PENDING,
+        paymentId: {
+          not: null,
+        },
+        createdAt: {
+          gte: new Date(
+            Date.now() - PENDING_PAYMENT_LOOKBACK_HOURS * 60 * 60 * 1000
+          ),
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    if (pendingOrder?.paymentId) {
+      const paymentData = await getPayment(pendingOrder.paymentId);
+      const paymentUrl = paymentData.confirmation?.confirmation_url;
+
+      if (paymentData.status === 'pending' && paymentUrl) {
+        return {
+          orderId: pendingOrder.id,
+          paymentUrl,
+          recovered: true,
+        };
+      }
+
+      if (paymentData.status === 'succeeded') {
+        await prisma.order.update({
+          where: {
+            id: pendingOrder.id,
+          },
+          data: {
+            status: OrderStatus.SUCCEEDED,
+          },
+        });
+      }
+
+      if (paymentData.status === 'canceled') {
+        await prisma.order.update({
+          where: {
+            id: pendingOrder.id,
+          },
+          data: {
+            status: OrderStatus.CANCELLED,
+          },
+        });
+      }
+    }
+
     const order = await prisma.order.create({
       data: {
         token: cartToken,
@@ -133,10 +187,91 @@ export async function createOrder(data: CheckoutFormValues) {
       console.log('[CreateOrder] sendEmail failed (non-fatal)', emailErr);
     }
 
-    return paymentUrl;
+    return {
+      orderId: order.id,
+      paymentUrl,
+      recovered: false,
+    };
   } catch (err) {
     console.log('[CreateOrder] Server error', err);
     throw err;
+  }
+}
+
+export async function getPendingPaymentOrder(orderId?: number) {
+  try {
+    const sessionUser = await getUserSession();
+
+    if (!sessionUser) {
+      throw new Error('Не авторизован');
+    }
+
+    const where: Prisma.OrderWhereInput = {
+      userId: Number(sessionUser.id),
+      status: OrderStatus.PENDING,
+      paymentId: {
+        not: null,
+      },
+    };
+
+    if (orderId) {
+      where.id = orderId;
+    }
+
+    const order = await prisma.order.findFirst({
+      where,
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    if (!order?.paymentId) {
+      return null;
+    }
+
+    const paymentData = await getPayment(order.paymentId);
+
+    if (paymentData.status === 'succeeded') {
+      await prisma.order.update({
+        where: {
+          id: order.id,
+        },
+        data: {
+          status: OrderStatus.SUCCEEDED,
+        },
+      });
+
+      return null;
+    }
+
+    if (paymentData.status === 'canceled') {
+      await prisma.order.update({
+        where: {
+          id: order.id,
+        },
+        data: {
+          status: OrderStatus.CANCELLED,
+        },
+      });
+
+      return null;
+    }
+
+    const paymentUrl = paymentData.confirmation?.confirmation_url;
+
+    if (paymentData.status !== 'pending' || !paymentUrl) {
+      return null;
+    }
+
+    return {
+      id: order.id,
+      totalAmount: order.totalAmount,
+      createdAt: order.createdAt,
+      paymentUrl,
+    };
+  } catch (err) {
+    console.log('[GetPendingPaymentOrder] Server error', err);
+    return null;
   }
 }
 

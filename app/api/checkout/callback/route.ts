@@ -42,8 +42,10 @@ export async function POST(req: NextRequest) {
     } else {
       // Письмо о неуспешной оплате
     }
+
+    return NextResponse.json({ ok: true });
   } catch (error) {
     console.log('[Checkout Callback] Error:', error);
-    return NextResponse.json({ error: 'Server error' });
+    return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }
