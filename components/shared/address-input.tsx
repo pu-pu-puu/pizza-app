@@ -41,6 +41,7 @@ export const AdressInput: React.FC<Props> = ({
   return (
     <AddressSuggestions
       token={token}
+      defaultQuery={value}
       onChange={(data) => onChange?.(data?.value)}
       inputProps={{
         onBlur,
