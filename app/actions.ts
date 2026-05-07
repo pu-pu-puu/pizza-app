@@ -15,6 +15,7 @@ const PENDING_PAYMENT_LOOKBACK_HOURS = 24;
 async function syncOrderPaymentStatus(orderId: number, paymentId: string) {
   const paymentData = await getPayment(paymentId);
   const paymentUrl = paymentData.confirmation?.confirmation_url;
+  let orderStatus: OrderStatus | null = null;
 
   if (paymentData.status === 'succeeded') {
     await prisma.order.update({
@@ -25,6 +26,7 @@ async function syncOrderPaymentStatus(orderId: number, paymentId: string) {
         status: OrderStatus.SUCCEEDED,
       },
     });
+    orderStatus = OrderStatus.SUCCEEDED;
   }
 
   if (paymentData.status === 'canceled') {
@@ -36,10 +38,12 @@ async function syncOrderPaymentStatus(orderId: number, paymentId: string) {
         status: OrderStatus.CANCELLED,
       },
     });
+    orderStatus = OrderStatus.CANCELLED;
   }
 
   return {
     status: paymentData.status,
+    orderStatus,
     paymentUrl,
   };
 }
@@ -287,6 +291,51 @@ export async function getPendingPaymentOrder(orderId?: number) {
     };
   } catch (err) {
     console.log('[GetPendingPaymentOrder] Server error', err);
+    return null;
+  }
+}
+
+export async function getPaymentOrderResult(orderId: number) {
+  try {
+    const sessionUser = await getUserSession();
+
+    if (!sessionUser) {
+      throw new Error('Не авторизован');
+    }
+
+    const order = await prisma.order.findFirst({
+      where: {
+        id: orderId,
+        userId: Number(sessionUser.id),
+      },
+    });
+
+    if (!order) {
+      return null;
+    }
+
+    if (order.status === OrderStatus.PENDING && order.paymentId) {
+      const paymentStatus = await syncOrderPaymentStatus(
+        order.id,
+        order.paymentId
+      );
+
+      if (paymentStatus.orderStatus) {
+        return {
+          id: order.id,
+          totalAmount: order.totalAmount,
+          status: paymentStatus.orderStatus,
+        };
+      }
+    }
+
+    return {
+      id: order.id,
+      totalAmount: order.totalAmount,
+      status: order.status,
+    };
+  } catch (err) {
+    console.log('[GetPaymentOrderResult] Server error', err);
     return null;
   }
 }
