@@ -15,6 +15,16 @@ export const Categories: React.FC<Props> = ({ className, items }) => {
   const setActiveCategoryIdFromClick = useCategoryStore(
     (state) => state.setActiveIdFromClick
   );
+  const handleClick = (
+    event: React.MouseEvent<HTMLAnchorElement>,
+    id: number,
+    name: string
+  ) => {
+    event.preventDefault();
+    setActiveCategoryIdFromClick(id);
+    document.getElementById(name)?.scrollIntoView({ behavior: 'smooth' });
+    window.history.replaceState(null, '', `/#${name}`);
+  };
 
   return (
     <div
@@ -29,7 +39,7 @@ export const Categories: React.FC<Props> = ({ className, items }) => {
           )}
           key={id}
           href={`/#${name}`}
-          onClick={() => setActiveCategoryIdFromClick(id)}
+          onClick={(event) => handleClick(event, id, name)}
         >
           <span>{name}</span>
         </a>

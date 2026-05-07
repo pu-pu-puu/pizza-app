@@ -19,9 +19,12 @@ interface Props {
 
 export const ChooseProductModal: React.FC<Props> = ({ product, className }) => {
   const router = useRouter();
+  const handleClose = React.useCallback(() => {
+    router.replace('/', { scroll: false });
+  }, [router]);
 
   return (
-    <Dialog open={Boolean(product)} onOpenChange={() => router.back()}>
+    <Dialog open={Boolean(product)} onOpenChange={(open) => !open && handleClose()}>
       <DialogContent
         className={cn(
           'p-0 w-[1060px] max-w-[1060px] min-h-[500px] bg-white overflow-hidden',
@@ -32,7 +35,7 @@ export const ChooseProductModal: React.FC<Props> = ({ product, className }) => {
         <DialogDescription className='sr-only'>
           Настройте параметры продукта перед добавлением в корзину.
         </DialogDescription>
-        <ProductForm product={product} onSubmit={() => router.back()} />
+        <ProductForm product={product} onSubmit={handleClose} />
       </DialogContent>
     </Dialog>
   );
