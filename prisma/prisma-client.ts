@@ -49,7 +49,7 @@ const buildConnectionString = (): string => {
 const buildAdapter = () => {
   const url = process.env.POSTGRES_URL_NON_POOLING || process.env.POSTGRES_URL;
 
-  if (!url) {
+  if (!url || !url.includes('neon.tech')) {
     return undefined;
   }
 
