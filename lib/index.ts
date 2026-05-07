@@ -8,4 +8,4 @@ export { findPizzas } from './find-pizzas';
 export { findOrCreateCart } from './find-or-create-cart';
 export { getCartItemDetails } from './get-cart-item-details';
 export { sendEmail } from './send-email';
-export { createPayment } from './creat-payment';
+export { createPayment, getPayment } from './creat-payment';

@@ -40,3 +40,17 @@ export async function createPayment(details: Props) {
 
   return data;
 }
+
+export async function getPayment(paymentId: string) {
+  const { data } = await axios.get<PaymentData>(
+    `https://api.yookassa.ru/v3/payments/${paymentId}`,
+    {
+      auth: {
+        username: process.env.YOOKASSA_STORE_ID as string,
+        password: process.env.YOOKASSA_API_KEY as string,
+      },
+    }
+  );
+
+  return data;
+}

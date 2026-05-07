@@ -77,12 +77,17 @@ export default function CheckoutPage() {
   const submitOrder = async (data: CheckoutFormValues) => {
     try {
       setSubmitting(true);
-      const url = await createOrder(data);
+      const order = await createOrder(data);
 
-      toast.success('Заказ оформлен, переходим к оплате', { icon: '✅' });
+      toast.success(
+        order.recovered
+          ? 'Нашли неоплаченный заказ, переходим к оплате'
+          : 'Заказ оформлен, переходим к оплате',
+        { icon: '✅' }
+      );
 
-      if (url) {
-        location.href = url;
+      if (order.paymentUrl) {
+        location.href = `/checkout/payment-pending?orderId=${order.orderId}`;
       } else {
         setSubmitting(false);
       }
@@ -136,6 +141,19 @@ export default function CheckoutPage() {
 
       <FormProvider {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
+          {isCartEmpty && (
+            <div className='mb-8 rounded-2xl bg-white p-5 text-gray-500'>
+              Если вы уже создали заказ, но не оплатили его, можно{' '}
+              <a
+                href='/checkout/payment-pending'
+                className='font-bold text-primary'
+              >
+                продолжить оплату
+              </a>
+              .
+            </div>
+          )}
+
           <div className='flex gap-10'>
             {/* Левая часть */}
             <div className='flex flex-col gap-10 flex-1 mb-20'>
