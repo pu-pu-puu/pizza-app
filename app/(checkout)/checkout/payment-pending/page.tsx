@@ -1,5 +1,6 @@
-import { getPendingPaymentOrder } from '@/app/actions';
+import { getPaymentOrderResult, getPendingPaymentOrder } from '@/app/actions';
 import { Button } from '@/components/ui';
+import { OrderStatus } from '@prisma/client';
 import { AlertCircle, ArrowRight, CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -23,6 +24,59 @@ export default async function PaymentPendingPage({ searchParams }: Props) {
   const order = await getPendingPaymentOrder(orderId);
 
   if (!order) {
+    const orderResult = orderId ? await getPaymentOrderResult(orderId) : null;
+
+    if (orderResult?.status === OrderStatus.SUCCEEDED) {
+      return (
+        <div className='flex justify-center py-24'>
+          <div className='w-full max-w-[620px] rounded-3xl bg-white p-10 text-center'>
+            <CheckCircle2 className='mx-auto mb-5 h-16 w-16 text-green-500' />
+            <h1 className='mb-3 text-3xl font-extrabold'>
+              Заказ #{orderResult.id} оплачен
+            </h1>
+            <p className='mb-8 text-lg text-gray-500'>
+              Мы получили оплату на сумму {orderResult.totalAmount} ₽. Статус
+              заказа уже обновлён, скоро начнём готовить.
+            </p>
+            <div className='flex flex-col justify-center gap-3 sm:flex-row'>
+              <Button
+                asChild
+                className='h-12 rounded-2xl px-8 text-base font-bold'
+              >
+                <Link href='/profile'>Перейти в профиль</Link>
+              </Button>
+              <Button
+                asChild
+                variant='outline'
+                className='h-12 rounded-2xl px-8 text-base font-bold'
+              >
+                <Link href='/'>На главную</Link>
+              </Button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (orderResult?.status === OrderStatus.CANCELLED) {
+      return (
+        <div className='flex justify-center py-24'>
+          <div className='w-full max-w-[620px] rounded-3xl bg-white p-10 text-center'>
+            <AlertCircle className='mx-auto mb-5 h-16 w-16 text-primary' />
+            <h1 className='mb-3 text-3xl font-extrabold'>
+              Оплата заказа #{orderResult.id} отменена
+            </h1>
+            <p className='mb-8 text-lg text-gray-500'>
+              YooKassa не подтвердила оплату. Вы можете оформить новый заказ.
+            </p>
+            <Button asChild className='h-12 rounded-2xl px-8 text-base font-bold'>
+              <Link href='/'>На главную</Link>
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className='flex justify-center py-24'>
         <div className='w-full max-w-[620px] rounded-3xl bg-white p-10 text-center'>
