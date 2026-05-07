@@ -6,11 +6,71 @@ import { CheckoutFormValues } from '@/constants';
 import { createPayment, getPayment, sendEmail } from '@/lib';
 import { OrderStatus, Prisma } from '@prisma/client';
 import { hashSync } from 'bcrypt';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { PayOrderTemplate } from '@/components/shared';
 import { getUserSession } from '@/lib/get-user-session';
 
 const PENDING_PAYMENT_LOOKBACK_HOURS = 24;
+
+async function syncOrderPaymentStatus(orderId: number, paymentId: string) {
+  const paymentData = await getPayment(paymentId);
+  const paymentUrl = paymentData.confirmation?.confirmation_url;
+
+  if (paymentData.status === 'succeeded') {
+    await prisma.order.update({
+      where: {
+        id: orderId,
+      },
+      data: {
+        status: OrderStatus.SUCCEEDED,
+      },
+    });
+  }
+
+  if (paymentData.status === 'canceled') {
+    await prisma.order.update({
+      where: {
+        id: orderId,
+      },
+      data: {
+        status: OrderStatus.CANCELLED,
+      },
+    });
+  }
+
+  return {
+    status: paymentData.status,
+    paymentUrl,
+  };
+}
+
+function getRequestOrigin() {
+  const requestHeaders = headers();
+  const host =
+    requestHeaders.get('x-forwarded-host') ?? requestHeaders.get('host');
+
+  if (host) {
+    const protocol =
+      requestHeaders.get('x-forwarded-proto') ??
+      (host.startsWith('localhost') ? 'http' : 'https');
+
+    return `${protocol}://${host}`;
+  }
+
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+
+  if (process.env.NEXTAUTH_URL) {
+    return process.env.NEXTAUTH_URL.replace(/\/$/, '');
+  }
+
+  throw new Error('App origin not found');
+}
+
+function getPaymentReturnUrl(orderId: number) {
+  return `${getRequestOrigin()}/checkout/payment-pending?orderId=${orderId}`;
+}
 
 export async function createOrder(data: CheckoutFormValues) {
   try {
@@ -82,37 +142,17 @@ export async function createOrder(data: CheckoutFormValues) {
     });
 
     if (pendingOrder?.paymentId) {
-      const paymentData = await getPayment(pendingOrder.paymentId);
-      const paymentUrl = paymentData.confirmation?.confirmation_url;
+      const paymentStatus = await syncOrderPaymentStatus(
+        pendingOrder.id,
+        pendingOrder.paymentId
+      );
 
-      if (paymentData.status === 'pending' && paymentUrl) {
+      if (paymentStatus.status === 'pending' && paymentStatus.paymentUrl) {
         return {
           orderId: pendingOrder.id,
-          paymentUrl,
+          paymentUrl: paymentStatus.paymentUrl,
           recovered: true,
         };
-      }
-
-      if (paymentData.status === 'succeeded') {
-        await prisma.order.update({
-          where: {
-            id: pendingOrder.id,
-          },
-          data: {
-            status: OrderStatus.SUCCEEDED,
-          },
-        });
-      }
-
-      if (paymentData.status === 'canceled') {
-        await prisma.order.update({
-          where: {
-            id: pendingOrder.id,
-          },
-          data: {
-            status: OrderStatus.CANCELLED,
-          },
-        });
       }
     }
 
@@ -136,6 +176,7 @@ export async function createOrder(data: CheckoutFormValues) {
       idempotenceKey: `order-${order.id}`,
       orderId: order.id,
       description: 'Оплата заказа #' + order.id,
+      returnUrl: getPaymentReturnUrl(order.id),
     });
 
     if (!paymentData) {
@@ -229,37 +270,12 @@ export async function getPendingPaymentOrder(orderId?: number) {
       return null;
     }
 
-    const paymentData = await getPayment(order.paymentId);
+    const paymentStatus = await syncOrderPaymentStatus(
+      order.id,
+      order.paymentId
+    );
 
-    if (paymentData.status === 'succeeded') {
-      await prisma.order.update({
-        where: {
-          id: order.id,
-        },
-        data: {
-          status: OrderStatus.SUCCEEDED,
-        },
-      });
-
-      return null;
-    }
-
-    if (paymentData.status === 'canceled') {
-      await prisma.order.update({
-        where: {
-          id: order.id,
-        },
-        data: {
-          status: OrderStatus.CANCELLED,
-        },
-      });
-
-      return null;
-    }
-
-    const paymentUrl = paymentData.confirmation?.confirmation_url;
-
-    if (paymentData.status !== 'pending' || !paymentUrl) {
+    if (paymentStatus.status !== 'pending' || !paymentStatus.paymentUrl) {
       return null;
     }
 
@@ -267,7 +283,7 @@ export async function getPendingPaymentOrder(orderId?: number) {
       id: order.id,
       totalAmount: order.totalAmount,
       createdAt: order.createdAt,
-      paymentUrl,
+      paymentUrl: paymentStatus.paymentUrl,
     };
   } catch (err) {
     console.log('[GetPendingPaymentOrder] Server error', err);
