@@ -20,7 +20,7 @@ interface Props {
 export const ChooseProductModal: React.FC<Props> = ({ product, className }) => {
   const router = useRouter();
   const handleClose = React.useCallback(() => {
-    router.replace('/', { scroll: false });
+    router.back();
   }, [router]);
 
   return (
