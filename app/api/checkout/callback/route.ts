@@ -1,7 +1,7 @@
 import { PaymentCallbackData } from '@/@types/yookassa';
 import { prisma } from '@/prisma/prisma-client';
 import { OrderSuccessTemplate } from '@/components/shared/email-temapltes/order-success';
-import { getPayment, sendEmail } from '@/lib';
+import { applyPaymentStatus, getPayment, sendEmail } from '@/lib';
 import { CartItemDTO } from '@/services/dto/cart.dto';
 import { OrderStatus } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
@@ -127,13 +127,13 @@ export async function POST(req: NextRequest) {
       nextStatus === OrderStatus.SUCCEEDED &&
       order.status !== OrderStatus.SUCCEEDED;
 
-    await prisma.order.update({
-      where: {
-        id: order.id,
-      },
-      data: {
-        status: nextStatus,
-      },
+    await applyPaymentStatus({
+      orderId: order.id,
+      previousStatus: order.status,
+      previousFulfillmentStatus: order.fulfillmentStatus,
+      nextStatus,
+      paymentId: order.paymentId,
+      source: 'yookassa_callback',
     });
 
     const items = JSON.parse(order?.items as string) as CartItemDTO[];
