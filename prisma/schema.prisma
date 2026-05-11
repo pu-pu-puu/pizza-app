@@ -54,6 +54,19 @@ model Product {
   active    Boolean @default(true)
   sortOrder Int     @default(0)
 
+  description String?
+  composition String?
+
+  calories Int?
+  proteins Float?
+  fats     Float?
+  carbs    Float?
+
+  allergens String[] @default([])
+  badges    String[] @default([])
+
+  stopUntil DateTime?
+
   category   Category @relation(fields: [categoryId], references: [id])
   categoryId Int
 
@@ -66,6 +79,7 @@ model Product {
 
   @@index([categoryId, sortOrder, id])
   @@index([active])
+  @@index([stopUntil])
 }
 
 model ProductItem {

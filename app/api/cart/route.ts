@@ -61,6 +61,32 @@ export async function POST(req: NextRequest) {
     const data = (await req.json()) as CreateCartItemValues;
     const ingredientIds = data.ingredients ?? [];
 
+    const productItem = await prisma.productItem.findUnique({
+      where: { id: data.productItemId },
+      include: { product: { select: { active: true, stopUntil: true, name: true } } },
+    });
+
+    if (!productItem) {
+      return NextResponse.json(
+        { message: 'Товар не найден' },
+        { status: 404 }
+      );
+    }
+
+    if (!productItem.product.active) {
+      return NextResponse.json(
+        { message: 'Товар недоступен' },
+        { status: 409 }
+      );
+    }
+
+    if (productItem.product.stopUntil && productItem.product.stopUntil > new Date()) {
+      return NextResponse.json(
+        { message: 'Товар временно недоступен' },
+        { status: 409 }
+      );
+    }
+
     const findCartItem = await prisma.cartItem.findFirst({
       where: {
         cartId: userCart.id,
