@@ -17,9 +17,11 @@ const CATEGORIES_CACHE_DURATION_MS = 15000;
 const categoriesQuery = {
   include: {
     products: {
-      orderBy: {
-        id: 'desc',
-      },
+      where: { active: true },
+      orderBy: [
+        { sortOrder: 'asc' },
+        { id: 'asc' },
+      ],
       include: {
         ingredients: true,
         items: {
@@ -30,9 +32,10 @@ const categoriesQuery = {
       },
     },
   },
-  orderBy: {
-    id: 'asc',
-  },
+  orderBy: [
+    { sortOrder: 'asc' },
+    { id: 'asc' },
+  ],
 } satisfies Prisma.CategoryFindManyArgs;
 
 type CategoryWithProducts = Prisma.CategoryGetPayload<typeof categoriesQuery>;
