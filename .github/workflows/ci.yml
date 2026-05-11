@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-build:
+    name: lint + build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      # Build needs valid-looking env so Next.js doesn't crash during static
+      # analysis (a few API routes are statically prerendered). Real network
+      # calls during build are avoided thanks to dynamic = force-dynamic on
+      # routes that read external services. The stubs below just keep the
+      # bundlers happy.
+      POSTGRES_URL: postgres://stub:stub@localhost:5432/stub?sslmode=require
+      POSTGRES_URL_NON_POOLING: postgres://stub:stub@localhost:5432/stub?sslmode=require
+      NEXT_PUBLIC_API_URL: /api
+      NEXTAUTH_SECRET: ci_dummy_secret_value_long_enough
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_DADATA_TOKEN: ci-dummy
+      NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: ci-dummy
+      NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET: ci-dummy
+      RESEND_API_KEY: ci-dummy
+      YOOKASSA_STORE_ID: ci-dummy
+      YOOKASSA_API_KEY: ci-dummy
+      YOOKASSA_CALLBACK_URL: http://localhost:3000/api/checkout/callback
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
