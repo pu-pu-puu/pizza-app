@@ -3,7 +3,7 @@
 import { prisma } from '@/prisma/prisma-client';
 import { VerificationUserTemplate } from '@/components/shared/email-temapltes/verification-user';
 import { CheckoutFormValues } from '@/constants';
-import { createPayment, getPayment, sendEmail } from '@/lib';
+import { applyPaymentStatus, createPayment, getPayment, sendEmail } from '@/lib';
 import { OrderStatus, Prisma } from '@prisma/client';
 import { hashSync } from 'bcrypt';
 import { cookies, headers } from 'next/headers';
@@ -17,28 +17,30 @@ async function syncOrderPaymentStatus(orderId: number, paymentId: string) {
   const paymentUrl = paymentData.confirmation?.confirmation_url;
   let orderStatus: OrderStatus | null = null;
 
-  if (paymentData.status === 'succeeded') {
-    await prisma.order.update({
-      where: {
-        id: orderId,
-      },
-      data: {
-        status: OrderStatus.SUCCEEDED,
-      },
-    });
-    orderStatus = OrderStatus.SUCCEEDED;
-  }
+  const nextStatus =
+    paymentData.status === 'succeeded'
+      ? OrderStatus.SUCCEEDED
+      : paymentData.status === 'canceled'
+      ? OrderStatus.CANCELLED
+      : null;
 
-  if (paymentData.status === 'canceled') {
-    await prisma.order.update({
-      where: {
-        id: orderId,
-      },
-      data: {
-        status: OrderStatus.CANCELLED,
-      },
+  if (nextStatus) {
+    const existing = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: { status: true, fulfillmentStatus: true, paymentId: true },
     });
-    orderStatus = OrderStatus.CANCELLED;
+
+    if (existing) {
+      await applyPaymentStatus({
+        orderId,
+        previousStatus: existing.status,
+        previousFulfillmentStatus: existing.fulfillmentStatus,
+        nextStatus,
+        paymentId: existing.paymentId ?? paymentId,
+        source: 'sync_pending_payment',
+      });
+      orderStatus = nextStatus;
+    }
   }
 
   return {
