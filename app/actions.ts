@@ -4,6 +4,7 @@ import { prisma } from '@/prisma/prisma-client';
 import { VerificationUserTemplate } from '@/components/shared/email-temapltes/verification-user';
 import { CheckoutFormValues } from '@/constants';
 import { applyPaymentStatus, createPayment, getPayment, sendEmail } from '@/lib';
+import { validatePromo } from '@/lib/calc-promo';
 import { OrderStatus, Prisma } from '@prisma/client';
 import { hashSync } from 'bcrypt';
 import { cookies, headers } from 'next/headers';
@@ -162,6 +163,35 @@ export async function createOrder(data: CheckoutFormValues) {
       }
     }
 
+    /* Применяем промокод, если указан */
+    let appliedPromoId: number | null = null;
+    let appliedPromoCode: string | null = null;
+    let appliedDiscount = 0;
+    let appliedFreeDelivery = false;
+
+    if (data.promoCode && data.promoCode.trim()) {
+      const promoResult = await validatePromo(data.promoCode, {
+        subtotal: userCart.totalAmount,
+        userId: fullUser.id,
+      });
+      if (!promoResult.ok) {
+        throw new Error(promoResult.message);
+      }
+      appliedPromoId = promoResult.promo.id;
+      appliedPromoCode = promoResult.promo.code;
+      appliedDiscount = promoResult.appliedAmount;
+      appliedFreeDelivery = promoResult.freeDelivery;
+    }
+
+    // Existing flow stores cart subtotal as `order.totalAmount` (delivery
+    // and VAT are display-only fields in the checkout sidebar). Apply the
+    // promo discount to that same subtotal so YooKassa charge stays
+    // consistent with what's shown to the user as "со скидкой". For
+    // FREE_DELIVERY the saving is on the (display-only) delivery line, so
+    // the subtotal stays unchanged.
+    const subtotalCut = appliedFreeDelivery ? 0 : appliedDiscount;
+    const orderTotal = Math.max(0, userCart.totalAmount - subtotalCut);
+
     const order = await prisma.order.create({
       data: {
         token: cartToken,
@@ -171,11 +201,30 @@ export async function createOrder(data: CheckoutFormValues) {
         phone: fullUser.phone ?? data.phone,
         address: data.address,
         comment: data.comment,
-        totalAmount: userCart.totalAmount,
+        totalAmount: orderTotal,
+        discountAmount: appliedDiscount,
+        promoId: appliedPromoId,
+        promoCode: appliedPromoCode,
         status: OrderStatus.PENDING,
         items: JSON.stringify(userCart.items),
       },
     });
+
+    if (appliedPromoId && appliedPromoCode) {
+      try {
+        await prisma.promoRedemption.create({
+          data: {
+            promoId: appliedPromoId,
+            orderId: order.id,
+            userId: fullUser.id,
+            appliedAmount: appliedDiscount,
+            code: appliedPromoCode,
+          },
+        });
+      } catch (redemptionErr) {
+        console.log('[CreateOrder] promo redemption write failed', redemptionErr);
+      }
+    }
 
     const paymentData = await createPayment({
       amount: order.totalAmount,

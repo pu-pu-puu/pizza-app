@@ -1,11 +1,17 @@
 'use client';
 
-import { CheckoutSidebar, Container, Title } from '@/components/shared';
+import {
+  CheckoutPromoInput,
+  CheckoutSidebar,
+  Container,
+  Title,
+} from '@/components/shared';
 import {
   CheckoutAddressForm,
   CheckoutCart,
   CheckoutPersonalForm,
 } from '@/components/shared/checkout';
+import type { ValidatedPromo } from '@/services/promo';
 import { OtpModal } from '@/components/shared/modals';
 import { checkoutFormSchema, CheckoutFormValues } from '@/constants';
 import { useCart } from '@/hooks';
@@ -28,6 +34,9 @@ export default function CheckoutPage() {
 
   const { totalAmount, updateItemQuantity, items, removeCartItem, loading } =
     useCart();
+  const [appliedPromo, setAppliedPromo] = React.useState<ValidatedPromo | null>(
+    null,
+  );
   const { data: session, update: updateSession } = useSession();
   const isCartEmpty = !loading && items.length === 0;
 
@@ -40,8 +49,16 @@ export default function CheckoutPage() {
       phone: '',
       address: '',
       comment: '',
+      promoCode: '',
     },
   });
+
+  React.useEffect(() => {
+    if (appliedPromo && appliedPromo.subtotal !== totalAmount) {
+      setAppliedPromo(null);
+      form.setValue('promoCode', '');
+    }
+  }, [totalAmount, appliedPromo, form]);
 
   React.useEffect(() => {
     async function fetchUserInfo() {
@@ -175,6 +192,16 @@ export default function CheckoutPage() {
                   loading || isCartEmpty ? 'opacity-40 pointer-events-none' : ''
                 }
               />
+
+              <CheckoutPromoInput
+                appliedPromo={appliedPromo}
+                onApply={setAppliedPromo}
+                onClear={() => setAppliedPromo(null)}
+                disabled={loading || isCartEmpty || submitting}
+                className={
+                  loading || isCartEmpty ? 'opacity-40 pointer-events-none' : ''
+                }
+              />
             </div>
 
             {/* Правая часть */}
@@ -183,6 +210,9 @@ export default function CheckoutPage() {
                 totalAmount={totalAmount}
                 loading={loading || submitting}
                 disabled={isCartEmpty || submitting}
+                promoCode={appliedPromo?.code}
+                promoDiscount={appliedPromo?.appliedAmount ?? 0}
+                freeDelivery={appliedPromo?.freeDelivery ?? false}
               />
             </div>
           </div>

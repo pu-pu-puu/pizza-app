@@ -26,6 +26,7 @@ model User {
   cart             Cart?
   orders           Order[]
   verificationCode VerificationCode?
+  promoRedemptions PromoRedemption[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -151,7 +152,12 @@ model Order {
   user   User? @relation(fields: [userId], references: [id])
   userId Int?
 
-  totalAmount Int
+  totalAmount    Int
+  discountAmount Int     @default(0)
+  promo          Promo?  @relation(fields: [promoId], references: [id])
+  promoId        Int?
+  promoCode      String?
+
   token       String
   status      OrderStatus
   paymentId   String?
@@ -167,7 +173,8 @@ model Order {
   address  String
   comment  String?
 
-  events OrderEvent[]
+  events     OrderEvent[]
+  redemption PromoRedemption?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -233,10 +240,66 @@ model StoryItem {
   createdAt DateTime @default(now())
 }
 
+model Promo {
+  id Int @id @default(autoincrement())
+
+  code           String    @unique
+  kind           PromoKind
+  valueOff       Int       @default(0)
+
+  minOrderAmount Int?
+  maxDiscount    Int?
+
+  validFrom  DateTime?
+  validUntil DateTime?
+
+  usageLimit   Int?
+  perUserLimit Int?
+
+  active      Boolean @default(true)
+  description String?
+
+  redemptions PromoRedemption[]
+  orders      Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active])
+  @@index([validFrom, validUntil])
+}
+
+model PromoRedemption {
+  id Int @id @default(autoincrement())
+
+  promo   Promo @relation(fields: [promoId], references: [id])
+  promoId Int
+
+  order   Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId Int   @unique
+
+  user   User? @relation(fields: [userId], references: [id])
+  userId Int?
+
+  appliedAmount Int
+  code          String
+
+  createdAt DateTime @default(now())
+
+  @@index([promoId, createdAt])
+  @@index([userId, promoId])
+}
+
 enum OrderStatus {
   PENDING
   SUCCEEDED
   CANCELLED
+}
+
+enum PromoKind {
+  PERCENT
+  FIXED
+  FREE_DELIVERY
 }
 
 enum OrderFulfillmentStatus {
