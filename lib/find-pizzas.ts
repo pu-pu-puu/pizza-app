@@ -14,31 +14,31 @@ export interface GetSearchParams {
 const DEFAULT_MIN_PRICE = 0;
 const CATEGORIES_CACHE_DURATION_MS = 15000;
 
-const categoriesQuery = {
-  include: {
-    products: {
-      where: { active: true },
-      orderBy: [
-        { sortOrder: 'asc' },
-        { id: 'asc' },
-      ],
-      include: {
-        ingredients: true,
-        items: {
-          orderBy: {
-            price: 'asc',
+const buildCategoriesQuery = (now: Date) =>
+  ({
+    include: {
+      products: {
+        where: {
+          active: true,
+          OR: [{ stopUntil: null }, { stopUntil: { lte: now } }],
+        },
+        orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+        include: {
+          ingredients: true,
+          items: {
+            orderBy: {
+              price: 'asc',
+            },
           },
         },
       },
     },
-  },
-  orderBy: [
-    { sortOrder: 'asc' },
-    { id: 'asc' },
-  ],
-} satisfies Prisma.CategoryFindManyArgs;
+    orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+  }) satisfies Prisma.CategoryFindManyArgs;
 
-type CategoryWithProducts = Prisma.CategoryGetPayload<typeof categoriesQuery>;
+type CategoriesQuery = ReturnType<typeof buildCategoriesQuery>;
+
+type CategoryWithProducts = Prisma.CategoryGetPayload<CategoriesQuery>;
 
 let cachedCategories:
   | {
@@ -55,7 +55,7 @@ const getCategories = async () => {
   }
 
   try {
-    const data = await prisma.category.findMany(categoriesQuery);
+    const data = await prisma.category.findMany(buildCategoriesQuery(new Date(now)));
     cachedCategories = {
       data,
       expiry: now + CATEGORIES_CACHE_DURATION_MS,
