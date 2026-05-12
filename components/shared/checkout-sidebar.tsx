@@ -1,7 +1,7 @@
 import React from 'react';
 import { WhiteBlock } from './white-block';
 import { CheckoutItemDetails } from './checkout-item-details';
-import { ArrowRight, Package, Percent, Truck } from 'lucide-react';
+import { ArrowRight, Package, Percent, Ticket, Truck } from 'lucide-react';
 import { Button, Skeleton } from '../ui';
 import { cn } from '@/lib/utils';
 
@@ -13,6 +13,9 @@ interface Props {
   loading?: boolean;
   disabled?: boolean;
   className?: string;
+  promoCode?: string;
+  promoDiscount?: number;
+  freeDelivery?: boolean;
 }
 
 export const CheckoutSidebar: React.FC<Props> = ({
@@ -20,10 +23,18 @@ export const CheckoutSidebar: React.FC<Props> = ({
   loading,
   disabled,
   className,
+  promoCode,
+  promoDiscount = 0,
+  freeDelivery = false,
 }) => {
   const vatPrice = (totalAmount * VAT) / 100;
-  const deliveryPrice = totalAmount > 0 ? DELIVERY_PRICE : 0;
-  const totalPrice = totalAmount + deliveryPrice + vatPrice;
+  const baseDeliveryPrice = totalAmount > 0 ? DELIVERY_PRICE : 0;
+  const deliveryPrice = freeDelivery ? 0 : baseDeliveryPrice;
+  const promoSubtotalCut = freeDelivery ? 0 : promoDiscount;
+  const totalPrice = Math.max(
+    0,
+    totalAmount + deliveryPrice + vatPrice - promoSubtotalCut,
+  );
 
   return (
     <WhiteBlock className={cn('p-6 sticky top-4', className)}>
@@ -78,11 +89,41 @@ export const CheckoutSidebar: React.FC<Props> = ({
         value={
           loading ? (
             <Skeleton className='h-6 w-16 rounded-[6px]' />
+          ) : freeDelivery ? (
+            <span className='text-emerald-600 font-semibold'>
+              <span className='line-through text-gray-400 font-normal mr-2'>
+                {baseDeliveryPrice} ₽
+              </span>
+              0 ₽
+            </span>
           ) : (
             `${deliveryPrice} ₽`
           )
         }
       />
+      {(promoCode && (promoDiscount > 0 || freeDelivery)) && (
+        <CheckoutItemDetails
+          title={
+            <div className='flex items-center'>
+              <Ticket size={18} className='mr-2 text-emerald-600' />
+              Промокод {promoCode}:
+            </div>
+          }
+          value={
+            loading ? (
+              <Skeleton className='h-6 w-16 rounded-[6px]' />
+            ) : freeDelivery ? (
+              <span className='text-emerald-600 font-semibold'>
+                −{baseDeliveryPrice} ₽
+              </span>
+            ) : (
+              <span className='text-emerald-600 font-semibold'>
+                −{promoDiscount} ₽
+              </span>
+            )
+          }
+        />
+      )}
 
       <Button
         loading={loading}
