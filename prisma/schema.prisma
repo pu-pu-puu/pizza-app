@@ -323,4 +323,7 @@ enum OrderEventKind {
 enum UserRole {
   USER
   ADMIN
+  OWNER
+  OPERATOR
+  MARKETER
 }
