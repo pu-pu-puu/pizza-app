@@ -1,5 +1,4 @@
 import * as Sentry from '@sentry/nextjs';
-import { NextResponse } from 'next/server';
 
 /**
  * Temporary smoke-test endpoint that intentionally throws so we can
