@@ -31,6 +31,19 @@ export interface Metadata {
   order_id: string;
 }
 
+export type RefundCallbackData = {
+  type: string;
+  event: string;
+  object: {
+    id: string;
+    status: string;
+    amount: { value: string; currency: 'RUB' };
+    payment_id: string;
+    description?: string;
+    created_at?: string;
+  };
+};
+
 export type PaymentCallbackData = {
   type: string;
   event: string;

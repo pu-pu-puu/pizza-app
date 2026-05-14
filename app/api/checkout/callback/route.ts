@@ -1,7 +1,12 @@
-import { PaymentCallbackData } from '@/@types/yookassa';
+import { PaymentCallbackData, RefundCallbackData } from '@/@types/yookassa';
 import { prisma } from '@/prisma/prisma-client';
 import { OrderSuccessTemplate } from '@/components/shared/email-temapltes/order-success';
-import { applyPaymentStatus, getPayment, sendEmail } from '@/lib';
+import {
+  applyPaymentStatus,
+  applyRefundFromCallback,
+  getPayment,
+  sendEmail,
+} from '@/lib';
 import { CartItemDTO } from '@/services/dto/cart.dto';
 import { OrderStatus } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
@@ -40,6 +45,27 @@ const isPaymentCallbackData = (
   );
 };
 
+const isRefundCallbackData = (
+  payload: unknown
+): payload is RefundCallbackData => {
+  if (!isRecord(payload) || !isRecord(payload.object)) {
+    return false;
+  }
+
+  const { object } = payload;
+
+  return (
+    typeof payload.type === 'string' &&
+    typeof payload.event === 'string' &&
+    typeof object.id === 'string' &&
+    typeof object.status === 'string' &&
+    typeof object.payment_id === 'string' &&
+    isRecord(object.amount) &&
+    typeof object.amount.value === 'string' &&
+    typeof object.amount.currency === 'string'
+  );
+};
+
 const parseAmount = (value: string) => {
   const amount = Number(value);
 
@@ -50,9 +76,57 @@ const parseAmount = (value: string) => {
   return Math.round(amount * 100);
 };
 
+const handleRefundCallback = async (payload: RefundCallbackData) => {
+  const refund = payload.object;
+
+  if (refund.status !== 'succeeded') {
+    return NextResponse.json(
+      { error: 'Unsupported refund status' },
+      { status: 400 }
+    );
+  }
+
+  const order = await prisma.order.findFirst({
+    where: { paymentId: refund.payment_id },
+  });
+
+  if (!order) {
+    return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+  }
+
+  const amountMinor = parseAmount(refund.amount.value);
+  const amountRubles =
+    amountMinor !== null ? Math.round(amountMinor) / 100 : null;
+
+  await applyRefundFromCallback({
+    orderId: order.id,
+    previousFulfillmentStatus: order.fulfillmentStatus,
+    refundId: refund.id,
+    paymentId: refund.payment_id,
+    amount: amountRubles,
+    source: 'yookassa_callback',
+  });
+
+  return NextResponse.json({ ok: true });
+};
+
 export async function POST(req: NextRequest) {
   try {
     const payload: unknown = await req.json();
+
+    if (
+      isRecord(payload) &&
+      payload.type === 'notification' &&
+      payload.event === 'refund.succeeded'
+    ) {
+      if (!isRefundCallbackData(payload)) {
+        return NextResponse.json(
+          { error: 'Invalid refund notification' },
+          { status: 400 }
+        );
+      }
+      return await handleRefundCallback(payload);
+    }
 
     if (!isPaymentCallbackData(payload)) {
       return NextResponse.json(

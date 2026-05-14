@@ -9,4 +9,4 @@ export { findOrCreateCart } from './find-or-create-cart';
 export { getCartItemDetails } from './get-cart-item-details';
 export { sendEmail } from './send-email';
 export { createPayment, getPayment } from './creat-payment';
-export { applyPaymentStatus } from './order-events';
+export { applyPaymentStatus, applyRefundFromCallback } from './order-events';
