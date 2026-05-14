@@ -33,6 +33,11 @@ jobs:
       YOOKASSA_STORE_ID: ci-dummy
       YOOKASSA_API_KEY: ci-dummy
       YOOKASSA_CALLBACK_URL: http://localhost:3000/api/checkout/callback
+      SENTRY_DSN: ""
+      SENTRY_AUTH_TOKEN: ""
+      SENTRY_ORG: ""
+      SENTRY_PROJECT: ""
+      NEXT_PUBLIC_SENTRY_DSN: ""
 
     steps:
       - name: Checkout

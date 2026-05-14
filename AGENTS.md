@@ -54,6 +54,7 @@ Local dev expects a `.env` at the repo root (gitignored). Required keys:
 - `GITHUB_ID`, `GITHUB_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
 - `NEXT_PUBLIC_DADATA_TOKEN` (public DaData suggestions token; configure domain restrictions in DaData)
 - `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME`, `NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET` (image uploads — used by admin, mirrored here for parity)
+- `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` (optional; Sentry activates only when DSN is set, source maps upload only when auth token is set)
 
 ## Conventions
 - Server-side DB access goes through `prisma` from `@/prisma/prisma-client`. Never instantiate `PrismaClient` ad-hoc.
