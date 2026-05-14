@@ -91,3 +91,54 @@ export const applyPaymentStatus = async ({
 
   return true;
 };
+
+type ApplyRefundFromCallbackInput = {
+  orderId: number;
+  previousFulfillmentStatus: OrderFulfillmentStatus;
+  refundId: string;
+  paymentId: string;
+  amount: number | null;
+  source?: string;
+};
+
+/**
+ * Marks the order as REFUNDED in response to a YooKassa `refund.succeeded`
+ * notification. No-ops if the order is already REFUNDED so repeated webhooks
+ * or admin-initiated refunds remain idempotent.
+ *
+ * Returns true if the database row was actually changed.
+ */
+export const applyRefundFromCallback = async ({
+  orderId,
+  previousFulfillmentStatus,
+  refundId,
+  paymentId,
+  amount,
+  source = 'yookassa_callback',
+}: ApplyRefundFromCallbackInput): Promise<boolean> => {
+  if (previousFulfillmentStatus === OrderFulfillmentStatus.REFUNDED) {
+    return false;
+  }
+
+  await prisma.order.update({
+    where: { id: orderId },
+    data: { fulfillmentStatus: OrderFulfillmentStatus.REFUNDED },
+  });
+
+  await prisma.orderEvent.create({
+    data: {
+      orderId,
+      kind: OrderEventKind.FULFILLMENT_STATUS_CHANGED,
+      payload: {
+        from: previousFulfillmentStatus,
+        to: OrderFulfillmentStatus.REFUNDED,
+        refundId,
+        paymentId,
+        amount,
+        source,
+      },
+    },
+  });
+
+  return true;
+};
