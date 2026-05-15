@@ -99,6 +99,11 @@ export async function createOrder(data: CheckoutFormValues) {
     if (!fullUser?.phoneVerified) {
       throw new Error('Телефон не подтверждён');
     }
+    if (fullUser.blacklisted) {
+      throw new Error(
+        'Заказ не может быть оформлен. Свяжитесь с поддержкой.',
+      );
+    }
 
     /* Находим корзину по токену */
     const userCart = await prisma.cart.findFirst({
