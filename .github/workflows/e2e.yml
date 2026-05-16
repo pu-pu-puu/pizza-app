@@ -1,0 +1,105 @@
+name: E2E smoke
+
+on:
+  pull_request:
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  playwright:
+    name: playwright smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Wait for Vercel preview deployment
+        id: vercel
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          # Poll the GitHub deployments API directly. The Vercel GitHub app
+          # publishes a deployment with environment="Preview" and updates its
+          # status to "success" with the preview URL in environment_url.
+          # Third-party "wait" actions were flaky on this repo, so we poll here.
+          max_attempts=60     # 60 * 15s = 15 minutes
+          attempt=0
+          preview_url=""
+          while [ "$attempt" -lt "$max_attempts" ]; do
+            attempt=$((attempt + 1))
+            deployments=$(curl -fsSL \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/deployments?sha=${SHA}&per_page=30")
+            deployment_id=$(echo "$deployments" | jq -r '
+              [ .[] | select(.environment == "Preview") ] | first | .id // empty
+            ')
+            if [ -n "$deployment_id" ] && [ "$deployment_id" != "null" ]; then
+              statuses=$(curl -fsSL \
+                -H "Authorization: Bearer $GH_TOKEN" \
+                -H "Accept: application/vnd.github+json" \
+                "https://api.github.com/repos/${GITHUB_REPOSITORY}/deployments/${deployment_id}/statuses?per_page=30")
+              state=$(echo "$statuses" | jq -r '.[0].state // empty')
+              url=$(echo "$statuses" | jq -r '.[0].environment_url // .[0].target_url // empty')
+              echo "Attempt ${attempt}: deployment ${deployment_id} state=${state} url=${url}"
+              if [ "$state" = "success" ] && [ -n "$url" ] && [ "$url" != "null" ]; then
+                preview_url="$url"
+                break
+              fi
+              if [ "$state" = "failure" ] || [ "$state" = "error" ]; then
+                echo "Vercel deployment ${deployment_id} ended in state=${state}" >&2
+                exit 1
+              fi
+            else
+              echo "Attempt ${attempt}: no Preview deployment found yet"
+            fi
+            sleep 15
+          done
+          if [ -z "$preview_url" ]; then
+            echo "Timed out waiting for Vercel preview deployment after ${max_attempts} attempts" >&2
+            exit 1
+          fi
+          echo "Resolved Vercel preview URL: ${preview_url}"
+          echo "url=${preview_url}" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright smoke
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ steps.vercel.outputs.url }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          CI: 'true'
+        run: |
+          if [ -z "${VERCEL_AUTOMATION_BYPASS_SECRET:-}" ]; then
+            echo "::error::VERCEL_AUTOMATION_BYPASS_SECRET secret is not set." \
+                 "Generate one in Vercel project Settings →" \
+                 "Deployment Protection → Protection Bypass for Automation," \
+                 "then add it as a GitHub Actions repository secret named" \
+                 "VERCEL_AUTOMATION_BYPASS_SECRET."
+            exit 1
+          fi
+          npx playwright test
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 14
