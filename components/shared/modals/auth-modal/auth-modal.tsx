@@ -7,6 +7,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { signIn } from 'next-auth/react';
+import Image from 'next/image';
 import React from 'react';
 import { LoginForm } from './forms/login-form';
 import { RegisterForm } from './forms/register-form';
@@ -56,9 +57,12 @@ export const AuthModal: React.FC<Props> = ({ open, onClose }) => {
             type='button'
             className='gap-2 h-12 p-2 flex-1'
           >
-            <img
-              className='w-6 h-6'
+            <Image
               src='https://github.githubassets.com/favicons/favicon.svg'
+              alt='GitHub'
+              width={24}
+              height={24}
+              className='w-6 h-6'
             />
             GitHub
           </Button>
@@ -74,9 +78,12 @@ export const AuthModal: React.FC<Props> = ({ open, onClose }) => {
             type='button'
             className='gap-2 h-12 p-2 flex-1'
           >
-            <img
-              className='w-6 h-6'
+            <Image
               src='https://fonts.gstatic.com/s/i/productlogos/googleg/v6/24px.svg'
+              alt='Google'
+              width={24}
+              height={24}
+              className='w-6 h-6'
             />
             Google
           </Button>

@@ -2,6 +2,7 @@ import React from 'react';
 import { Button } from '../ui/button';
 import { ArrowLeft } from 'lucide-react';
 import { Title } from './title';
+import Image from 'next/image';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 
@@ -49,7 +50,9 @@ export const InfoBlock: React.FC<Props> = ({
         </div>
       </div>
 
-      <img src={imageUrl} alt={title} width={300} />
+      {imageUrl && (
+        <Image src={imageUrl} alt={title} width={300} height={355} />
+      )}
     </div>
   );
 };

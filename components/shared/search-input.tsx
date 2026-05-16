@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { Api } from '@/services/api-client';
 import { Product } from '@prisma/client';
 import { Search } from 'lucide-react';
+import Image from 'next/image';
 import Link from 'next/link';
 import React from 'react';
 import { useDebounce } from 'react-use';
@@ -84,10 +85,12 @@ export const SearchInput: React.FC<Props> = ({ className }) => {
                 scroll={false}
                 key={product.id}
               >
-                <img
+                <Image
                   className='rounded-sm h-8 w-8'
                   src={product.imageUrl}
                   alt={product.name}
+                  width={32}
+                  height={32}
                 />
                 <span>{product.name}</span>
               </Link>
