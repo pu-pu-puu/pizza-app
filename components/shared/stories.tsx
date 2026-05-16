@@ -2,6 +2,7 @@
 
 import { Api } from '@/services/api-client';
 import { IStory } from '@/services/stories';
+import Image from 'next/image';
 import React from 'react';
 import { Container } from './container';
 import { cn } from '@/lib/utils';
@@ -197,13 +198,15 @@ export const Stories: React.FC<Props> = ({ className }) => {
                 onClick={() => onClickStory(index)}
                 className='group relative h-[204px] min-w-[164px] overflow-hidden rounded-3xl bg-gray-100 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg'
               >
-                <img
-                  className='h-full w-full object-cover transition duration-300 group-hover:scale-105'
-                  height={204}
-                  width={164}
-                  src={story.previewImageUrl}
-                  alt={`Story ${story.id}`}
-                />
+                {isValidImageUrl(story.previewImageUrl) && (
+                  <Image
+                    className='h-full w-full object-cover transition duration-300 group-hover:scale-105'
+                    height={204}
+                    width={164}
+                    src={story.previewImageUrl}
+                    alt={`Story ${story.id}`}
+                  />
+                )}
                 <span className='pointer-events-none absolute inset-0 rounded-3xl ring-1 ring-black/5' />
                 <span className='pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/20 to-transparent opacity-80' />
               </button>
@@ -295,10 +298,12 @@ export const Stories: React.FC<Props> = ({ className }) => {
                 <X className='h-5 w-5' />
               </button>
 
-              <img
+              <Image
                 key={`${selectedStory.id}-${selectedItemIndex}`}
                 src={selectedItemUrl}
                 alt={`Story ${selectedStory.id}`}
+                width={450}
+                height={720}
                 className='h-full w-full object-cover'
               />
             </div>

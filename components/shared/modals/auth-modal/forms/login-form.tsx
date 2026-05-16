@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import React from 'react';
 import { FormProvider, useForm } from 'react-hook-form';
 import { TFormLoginValues, formLoginSchema } from './schemas';
@@ -58,7 +59,7 @@ export const LoginForm: React.FC<Props> = ({ onClose }) => {
               Введите свою почту, чтобы войти в свой аккаунт
             </p>
           </div>
-          <img
+          <Image
             src='/assets/images/phone-icon.png'
             alt='phone-icon'
             width={60}
