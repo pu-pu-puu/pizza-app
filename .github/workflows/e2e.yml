@@ -11,7 +11,7 @@ jobs:
   playwright:
     name: playwright smoke
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - name: Checkout
@@ -25,12 +25,54 @@ jobs:
 
       - name: Wait for Vercel preview deployment
         id: vercel
-        uses: patrickedqvist/wait-for-vercel-preview@v1.3.1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          # Vercel preview builds can take a few minutes on a cold lambda.
-          max_timeout: 900
-          check_interval: 15
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          # Poll the GitHub deployments API directly. The Vercel GitHub app
+          # publishes a deployment with environment="Preview" and updates its
+          # status to "success" with the preview URL in environment_url.
+          # Third-party "wait" actions were flaky on this repo, so we poll here.
+          max_attempts=60     # 60 * 15s = 15 minutes
+          attempt=0
+          preview_url=""
+          while [ "$attempt" -lt "$max_attempts" ]; do
+            attempt=$((attempt + 1))
+            deployments=$(curl -fsSL \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/deployments?sha=${SHA}&per_page=30")
+            deployment_id=$(echo "$deployments" | jq -r '
+              [ .[] | select(.environment == "Preview") ] | first | .id // empty
+            ')
+            if [ -n "$deployment_id" ] && [ "$deployment_id" != "null" ]; then
+              statuses=$(curl -fsSL \
+                -H "Authorization: Bearer $GH_TOKEN" \
+                -H "Accept: application/vnd.github+json" \
+                "https://api.github.com/repos/${GITHUB_REPOSITORY}/deployments/${deployment_id}/statuses?per_page=30")
+              state=$(echo "$statuses" | jq -r '.[0].state // empty')
+              url=$(echo "$statuses" | jq -r '.[0].environment_url // .[0].target_url // empty')
+              echo "Attempt ${attempt}: deployment ${deployment_id} state=${state} url=${url}"
+              if [ "$state" = "success" ] && [ -n "$url" ] && [ "$url" != "null" ]; then
+                preview_url="$url"
+                break
+              fi
+              if [ "$state" = "failure" ] || [ "$state" = "error" ]; then
+                echo "Vercel deployment ${deployment_id} ended in state=${state}" >&2
+                exit 1
+              fi
+            else
+              echo "Attempt ${attempt}: no Preview deployment found yet"
+            fi
+            sleep 15
+          done
+          if [ -z "$preview_url" ]; then
+            echo "Timed out waiting for Vercel preview deployment after ${max_attempts} attempts" >&2
+            exit 1
+          fi
+          echo "Resolved Vercel preview URL: ${preview_url}"
+          echo "url=${preview_url}" >> "$GITHUB_OUTPUT"
 
       - name: Install dependencies
         run: npm ci
@@ -41,7 +83,7 @@ jobs:
       - name: Run Playwright smoke
         env:
           PLAYWRIGHT_BASE_URL: ${{ steps.vercel.outputs.url }}
-          CI: true
+          CI: 'true'
         run: npx playwright test
 
       - name: Upload Playwright report
