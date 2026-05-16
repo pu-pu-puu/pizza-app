@@ -71,16 +71,19 @@ test.describe('storefront smoke', () => {
       { timeout: 20_000 },
     );
 
-    // The cart trigger is the header button containing both the cart icon
-    // and the totalAmount. Opening it pops a Vaul drawer with cart items.
+    // The cart trigger is the header button containing the totalAmount. Opening
+    // it pops a Radix Sheet (role="dialog") with cart items.
     const cartTrigger = page.locator('header button').filter({ hasText: /₽/ }).first();
     await cartTrigger.click();
 
-    // Drawer renders <h2>В корзине N товаров</h2> in cart-drawer.tsx, plus
-    // the product name as a heading for each line item.
-    await expect(page.getByText(productName).first()).toBeVisible();
+    // Scope assertions to the drawer dialog so we don't false-match the
+    // product name shown in the underlying page content.
+    const drawer = page.getByRole('dialog');
+    await expect(drawer).toBeVisible();
+    await expect(drawer.getByText(/В корзине/)).toBeVisible();
+    await expect(drawer.getByText(productName).first()).toBeVisible();
     await expect(
-      page.getByRole('link', { name: /Оформить заказ/ }),
+      drawer.getByRole('link', { name: /Оформить заказ/ }),
     ).toBeVisible();
   });
 
