@@ -12,6 +12,22 @@ const baseURL =
   process.env.BASE_URL ??
   'http://localhost:3000';
 
+/**
+ * Vercel Deployment Protection is enabled on preview deployments. To talk to
+ * the protected URL from CI we forward the project-level "Protection Bypass
+ * for Automation" secret on every request (header + cookie-setting query
+ * param). The secret is exposed to the workflow via
+ * `secrets.VERCEL_AUTOMATION_BYPASS_SECRET`; locally it's unset and tests
+ * just hit the public URL (e.g. production / localhost) without the header.
+ */
+const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+const extraHTTPHeaders = bypassSecret
+  ? {
+      'x-vercel-protection-bypass': bypassSecret,
+      'x-vercel-set-bypass-cookie': 'samesitenone',
+    }
+  : undefined;
+
 export default defineConfig({
   testDir: './e2e',
   timeout: 60_000,
@@ -25,6 +41,7 @@ export default defineConfig({
     : [['list']],
   use: {
     baseURL,
+    extraHTTPHeaders,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',

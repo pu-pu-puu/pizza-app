@@ -83,8 +83,18 @@ jobs:
       - name: Run Playwright smoke
         env:
           PLAYWRIGHT_BASE_URL: ${{ steps.vercel.outputs.url }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
           CI: 'true'
-        run: npx playwright test
+        run: |
+          if [ -z "${VERCEL_AUTOMATION_BYPASS_SECRET:-}" ]; then
+            echo "::error::VERCEL_AUTOMATION_BYPASS_SECRET secret is not set." \
+                 "Generate one in Vercel project Settings →" \
+                 "Deployment Protection → Protection Bypass for Automation," \
+                 "then add it as a GitHub Actions repository secret named" \
+                 "VERCEL_AUTOMATION_BYPASS_SECRET."
+            exit 1
+          fi
+          npx playwright test
 
       - name: Upload Playwright report
         if: always()
