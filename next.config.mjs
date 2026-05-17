@@ -30,10 +30,12 @@ const nextConfig = {
 };
 
 export default withSentryConfig(nextConfig, {
-  silent: true,
+  // `silent: false` so the Sentry Webpack plugin surfaces source-map upload
+  // status (success / missing auth token / bad scopes) in Vercel build logs.
+  // Mirrors the diagnostic flip already in pizza-admin (see handoff v3 §8).
+  silent: false,
   org: process.env.SENTRY_ORG,
   project: process.env.SENTRY_PROJECT,
   authToken: process.env.SENTRY_AUTH_TOKEN,
   widenClientFileUpload: true,
-  disableLogger: true,
 });
