@@ -29,17 +29,21 @@ const isNodeServer =
 
 const pinoLogger = createPinoLogger();
 
+type PinoFactory = (opts: Record<string, unknown>) => PinoLike;
+type PinoModule = PinoFactory & { default?: PinoFactory };
+
 function createPinoLogger(): PinoLike | null {
   if (!isNodeServer) return null;
   try {
     // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-eval
     const requireFn = eval('require') as NodeJS.Require;
-    const pino = requireFn('pino') as typeof import('pino');
-    return pino.default({
+    const pinoModule = requireFn('pino') as PinoModule;
+    const pino: PinoFactory = pinoModule.default ?? pinoModule;
+    return pino({
       level: process.env.LOG_LEVEL ?? 'info',
       base: { service: SERVICE },
       formatters: {
-        level: (label) => ({ level: label }),
+        level: (label: string) => ({ level: label }),
       },
       mixin: () => {
         const requestId = getRequestId();
