@@ -7,6 +7,8 @@ import {
   getPayment,
   sendEmail,
 } from '@/lib';
+import { logger } from '@/lib/logger';
+import { runWithRequestContext } from '@/lib/request-context';
 import { CartItemDTO } from '@/services/dto/cart.dto';
 import { OrderStatus } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
@@ -111,120 +113,122 @@ const handleRefundCallback = async (payload: RefundCallbackData) => {
 };
 
 export async function POST(req: NextRequest) {
-  try {
-    const payload: unknown = await req.json();
+  return runWithRequestContext(req, async () => {
+    try {
+      const payload: unknown = await req.json();
 
-    if (
-      isRecord(payload) &&
-      payload.type === 'notification' &&
-      payload.event === 'refund.succeeded'
-    ) {
-      if (!isRefundCallbackData(payload)) {
+      if (
+        isRecord(payload) &&
+        payload.type === 'notification' &&
+        payload.event === 'refund.succeeded'
+      ) {
+        if (!isRefundCallbackData(payload)) {
+          return NextResponse.json(
+            { error: 'Invalid refund notification' },
+            { status: 400 }
+          );
+        }
+        return await handleRefundCallback(payload);
+      }
+
+      if (!isPaymentCallbackData(payload)) {
         return NextResponse.json(
-          { error: 'Invalid refund notification' },
+          { error: 'Invalid payment notification' },
           { status: 400 }
         );
       }
-      return await handleRefundCallback(payload);
+
+      const body = payload;
+      const paymentObject = body.object;
+
+      if (
+        body.type !== 'notification' ||
+        !isSupportedPaymentEvent(body.event) ||
+        paymentObject.status !== body.event.replace('payment.', '')
+      ) {
+        return NextResponse.json(
+          { error: 'Unsupported payment notification' },
+          { status: 400 }
+        );
+      }
+
+      const orderId = Number(paymentObject.metadata.order_id);
+
+      if (!Number.isInteger(orderId)) {
+        return NextResponse.json({ error: 'Invalid order id' }, { status: 400 });
+      }
+
+      const order = await prisma.order.findFirst({
+        where: {
+          id: orderId,
+        },
+      });
+
+      if (!order) {
+        return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+      }
+
+      if (order.paymentId !== paymentObject.id) {
+        return NextResponse.json({ error: 'Payment mismatch' }, { status: 400 });
+      }
+
+      const amount = parseAmount(paymentObject.amount.value);
+
+      if (
+        paymentObject.amount.currency !== 'RUB' ||
+        amount === null ||
+        amount !== order.totalAmount * 100
+      ) {
+        return NextResponse.json({ error: 'Amount mismatch' }, { status: 400 });
+      }
+
+      const paymentData = await getPayment(paymentObject.id);
+      const verifiedAmount = parseAmount(paymentData.amount.value);
+
+      if (
+        paymentData.id !== paymentObject.id ||
+        paymentData.status !== paymentObject.status ||
+        Number(paymentData.metadata.order_id) !== order.id ||
+        paymentData.amount.currency !== 'RUB' ||
+        verifiedAmount === null ||
+        verifiedAmount !== order.totalAmount * 100
+      ) {
+        return NextResponse.json(
+          { error: 'Payment status mismatch' },
+          { status: 400 }
+        );
+      }
+
+      const nextStatus = EVENT_STATUS_MAP[body.event];
+      const shouldSendSuccessEmail =
+        nextStatus === OrderStatus.SUCCEEDED &&
+        order.status !== OrderStatus.SUCCEEDED;
+
+      await applyPaymentStatus({
+        orderId: order.id,
+        previousStatus: order.status,
+        previousFulfillmentStatus: order.fulfillmentStatus,
+        nextStatus,
+        paymentId: order.paymentId,
+        source: 'yookassa_callback',
+      });
+
+      const items = JSON.parse(order?.items as string) as CartItemDTO[];
+
+      if (shouldSendSuccessEmail) {
+        await sendEmail(
+          order.email,
+          'Next Pizza / Ваш заказ успешно оформлен 🎉',
+          OrderSuccessTemplate({ orderId: order.id, items })
+        );
+      } else {
+        // Письмо о неуспешной оплате
+      }
+
+      return NextResponse.json({ ok: true });
+    } catch (error) {
+      logger.error('checkout_callback_failed', error);
+      return NextResponse.json({ error: 'Server error' }, { status: 500 });
     }
-
-    if (!isPaymentCallbackData(payload)) {
-      return NextResponse.json(
-        { error: 'Invalid payment notification' },
-        { status: 400 }
-      );
-    }
-
-    const body = payload;
-    const paymentObject = body.object;
-
-    if (
-      body.type !== 'notification' ||
-      !isSupportedPaymentEvent(body.event) ||
-      paymentObject.status !== body.event.replace('payment.', '')
-    ) {
-      return NextResponse.json(
-        { error: 'Unsupported payment notification' },
-        { status: 400 }
-      );
-    }
-
-    const orderId = Number(paymentObject.metadata.order_id);
-
-    if (!Number.isInteger(orderId)) {
-      return NextResponse.json({ error: 'Invalid order id' }, { status: 400 });
-    }
-
-    const order = await prisma.order.findFirst({
-      where: {
-        id: orderId,
-      },
-    });
-
-    if (!order) {
-      return NextResponse.json({ error: 'Order not found' }, { status: 404 });
-    }
-
-    if (order.paymentId !== paymentObject.id) {
-      return NextResponse.json({ error: 'Payment mismatch' }, { status: 400 });
-    }
-
-    const amount = parseAmount(paymentObject.amount.value);
-
-    if (
-      paymentObject.amount.currency !== 'RUB' ||
-      amount === null ||
-      amount !== order.totalAmount * 100
-    ) {
-      return NextResponse.json({ error: 'Amount mismatch' }, { status: 400 });
-    }
-
-    const paymentData = await getPayment(paymentObject.id);
-    const verifiedAmount = parseAmount(paymentData.amount.value);
-
-    if (
-      paymentData.id !== paymentObject.id ||
-      paymentData.status !== paymentObject.status ||
-      Number(paymentData.metadata.order_id) !== order.id ||
-      paymentData.amount.currency !== 'RUB' ||
-      verifiedAmount === null ||
-      verifiedAmount !== order.totalAmount * 100
-    ) {
-      return NextResponse.json(
-        { error: 'Payment status mismatch' },
-        { status: 400 }
-      );
-    }
-
-    const nextStatus = EVENT_STATUS_MAP[body.event];
-    const shouldSendSuccessEmail =
-      nextStatus === OrderStatus.SUCCEEDED &&
-      order.status !== OrderStatus.SUCCEEDED;
-
-    await applyPaymentStatus({
-      orderId: order.id,
-      previousStatus: order.status,
-      previousFulfillmentStatus: order.fulfillmentStatus,
-      nextStatus,
-      paymentId: order.paymentId,
-      source: 'yookassa_callback',
-    });
-
-    const items = JSON.parse(order?.items as string) as CartItemDTO[];
-
-    if (shouldSendSuccessEmail) {
-      await sendEmail(
-        order.email,
-        'Next Pizza / Ваш заказ успешно оформлен 🎉',
-        OrderSuccessTemplate({ orderId: order.id, items })
-      );
-    } else {
-      // Письмо о неуспешной оплате
-    }
-
-    return NextResponse.json({ ok: true });
-  } catch (error) {
-    console.log('[Checkout Callback] Error:', error);
-    return NextResponse.json({ error: 'Server error' }, { status: 500 });
-  }
+  });
 }
