@@ -7,6 +7,7 @@ import { prisma } from '@/prisma/prisma-client';
 import { compare, hashSync } from 'bcrypt';
 import { UserRole } from '@prisma/client';
 import { findOrCreateUserByPhone, verifyOtpCore } from '@/lib/otp';
+import { logger } from '@/lib/logger';
 
 export const authOptions: AuthOptions = {
   providers: [
@@ -156,7 +157,9 @@ export const authOptions: AuthOptions = {
 
         return true;
       } catch (error) {
-        console.error('Error [SIGNIN]', error);
+        logger.error('signin_callback_failed', error, {
+          provider: account?.provider,
+        });
         return false;
       }
     },
