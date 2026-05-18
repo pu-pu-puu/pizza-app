@@ -4,6 +4,7 @@ import { getUserSession } from '@/lib/get-user-session';
 import { logger } from '@/lib/logger';
 import { runWithRequestContext } from '@/lib/request-context';
 import { verifyOtpCore } from '@/lib/otp';
+import { checkOtpVerifyRateLimit, extractClientIp } from '@/lib/rate-limit';
 
 /**
  * Attach a freshly OTP-verified phone number to the *currently logged-in*
@@ -17,6 +18,15 @@ import { verifyOtpCore } from '@/lib/otp';
 export async function POST(req: NextRequest) {
   return runWithRequestContext(req, async () => {
     try {
+      const ip = extractClientIp(req);
+      const ipLimit = await checkOtpVerifyRateLimit(ip);
+      if (!ipLimit.success) {
+        return NextResponse.json(
+          { message: 'Слишком много попыток, попробуйте позже' },
+          { status: 429 }
+        );
+      }
+
       const session = await getUserSession();
       if (!session) {
         return NextResponse.json(

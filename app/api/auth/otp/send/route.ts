@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { normalizeRuPhone } from '@/lib/phone';
 import { runWithRequestContext } from '@/lib/request-context';
 import { getSmsSender } from '@/lib/sms/sender';
+import { checkOtpSendRateLimit, extractClientIp } from '@/lib/rate-limit';
 
 const CODE_TTL_SECONDS = 5 * 60;
 const RATE_LIMIT_PER_MINUTE = 1;
@@ -20,6 +21,15 @@ function generateCode(): string {
 export async function POST(req: NextRequest) {
   return runWithRequestContext(req, async () => {
     try {
+      const ip = extractClientIp(req);
+      const ipLimit = await checkOtpSendRateLimit(ip);
+      if (!ipLimit.success) {
+        return NextResponse.json(
+          { message: 'Слишком много попыток, попробуйте позже' },
+          { status: 429 }
+        );
+      }
+
       const body = (await req.json()) as { phone?: unknown };
       const rawPhone = typeof body.phone === 'string' ? body.phone : '';
       const phone = normalizeRuPhone(rawPhone);
