@@ -3,9 +3,14 @@ import {
   OrderFulfillmentStatus,
   OrderStatus,
   Prisma,
+  RefundStatus,
 } from '@prisma/client';
 
 import { prisma } from '@/prisma/prisma-client';
+import {
+  getOrderSucceededOrPendingRefundsTotal,
+  mapYookassaRefundStatus,
+} from '@/lib/refund-service';
 
 type ApplyPaymentStatusInput = {
   orderId: number;
@@ -94,36 +99,99 @@ export const applyPaymentStatus = async ({
 
 type ApplyRefundFromCallbackInput = {
   orderId: number;
+  totalAmount: number;
   previousFulfillmentStatus: OrderFulfillmentStatus;
   refundId: string;
   paymentId: string;
-  amount: number | null;
+  amount: number;
+  /** Raw YooKassa status from the webhook payload ('succeeded' | 'canceled' | ...). */
+  rawStatus: string;
   source?: string;
 };
 
 /**
- * Marks the order as REFUNDED in response to a YooKassa `refund.succeeded`
- * notification. No-ops if the order is already REFUNDED so repeated webhooks
- * or admin-initiated refunds remain idempotent.
+ * Idempotent refund record update triggered by a YooKassa webhook.
  *
- * Returns true if the database row was actually changed.
+ * Upserts the Refund row by `yookassaRefundId` so re-delivered webhooks
+ * never double-write. Only after the row reaches SUCCEEDED do we check
+ * the running refund total — the order is only promoted to REFUNDED
+ * when the cumulative SUCCEEDED amount is at least the order total.
+ *
+ * Returns true if anything in the DB changed (refund row written or
+ * order row updated).
  */
 export const applyRefundFromCallback = async ({
   orderId,
+  totalAmount,
   previousFulfillmentStatus,
   refundId,
   paymentId,
   amount,
+  rawStatus,
   source = 'yookassa_callback',
 }: ApplyRefundFromCallbackInput): Promise<boolean> => {
-  if (previousFulfillmentStatus === OrderFulfillmentStatus.REFUNDED) {
+  const status = mapYookassaRefundStatus(rawStatus);
+  const now = new Date();
+
+  const existing = await prisma.refund.findUnique({
+    where: { yookassaRefundId: refundId },
+    select: { id: true, status: true },
+  });
+
+  if (existing && existing.status === status) {
+    // Already in the desired terminal state — webhook re-delivery.
     return false;
   }
 
-  await prisma.order.update({
-    where: { id: orderId },
-    data: { fulfillmentStatus: OrderFulfillmentStatus.REFUNDED },
+  await prisma.refund.upsert({
+    where: { yookassaRefundId: refundId },
+    create: {
+      orderId,
+      amount,
+      yookassaRefundId: refundId,
+      status,
+      createdBy: null,
+      webhookReceivedAt: now,
+    },
+    update: {
+      status,
+      webhookReceivedAt: now,
+      // Only refresh the amount on first webhook delivery; if the row
+      // was pre-created by the admin POST handler with the canonical
+      // amount, we trust that value.
+      ...(existing ? {} : { amount }),
+    },
   });
+
+  if (status !== RefundStatus.SUCCEEDED) {
+    await prisma.orderEvent.create({
+      data: {
+        orderId,
+        kind: OrderEventKind.OTHER,
+        payload: {
+          kind: 'REFUND_STATUS_CHANGED',
+          refundId,
+          paymentId,
+          amount,
+          refundStatus: status,
+          source,
+        },
+      },
+    });
+    return true;
+  }
+
+  const refundedTotal = await getOrderSucceededOrPendingRefundsTotal(orderId);
+  const shouldFlipOrderToRefunded =
+    refundedTotal >= totalAmount &&
+    previousFulfillmentStatus !== OrderFulfillmentStatus.REFUNDED;
+
+  if (shouldFlipOrderToRefunded) {
+    await prisma.order.update({
+      where: { id: orderId },
+      data: { fulfillmentStatus: OrderFulfillmentStatus.REFUNDED },
+    });
+  }
 
   await prisma.orderEvent.create({
     data: {
@@ -131,10 +199,14 @@ export const applyRefundFromCallback = async ({
       kind: OrderEventKind.FULFILLMENT_STATUS_CHANGED,
       payload: {
         from: previousFulfillmentStatus,
-        to: OrderFulfillmentStatus.REFUNDED,
+        to: shouldFlipOrderToRefunded
+          ? OrderFulfillmentStatus.REFUNDED
+          : previousFulfillmentStatus,
         refundId,
         paymentId,
         amount,
+        refundStatus: status,
+        refundedTotal,
         source,
       },
     },

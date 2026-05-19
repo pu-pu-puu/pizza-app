@@ -27,6 +27,14 @@ vi.mock('@/prisma/prisma-client', () => ({
     orderEvent: {
       create: vi.fn(),
     },
+    refund: {
+      aggregate: vi.fn(),
+      create: vi.fn(),
+      findMany: vi.fn(),
+      findUnique: vi.fn(),
+      update: vi.fn(),
+      upsert: vi.fn(),
+    },
     cart: {
       findFirst: vi.fn(),
       create: vi.fn(),

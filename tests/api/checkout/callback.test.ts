@@ -224,14 +224,41 @@ describe('POST /api/checkout/callback', () => {
     expect(applyRefundFromCallback).toHaveBeenCalledWith(
       expect.objectContaining({
         orderId: 42,
+        totalAmount: 1000,
         refundId: 'rfd_zzz',
         paymentId: 'pmt_abc',
         amount: 1000,
         previousFulfillmentStatus: OrderFulfillmentStatus.CONFIRMED,
+        rawStatus: 'succeeded',
         source: 'yookassa_callback',
       }),
     );
     expect(applyPaymentStatus).not.toHaveBeenCalled();
+  });
+
+  it('processes a refund.canceled notification and forwards rawStatus=canceled', async () => {
+    vi.mocked(prisma.order.findFirst).mockResolvedValue({
+      ...validOrder,
+      status: OrderStatus.SUCCEEDED,
+      fulfillmentStatus: OrderFulfillmentStatus.CONFIRMED,
+    } as unknown as Awaited<ReturnType<typeof prisma.order.findFirst>>);
+
+    const res = await post({
+      ...refundPayload,
+      event: 'refund.canceled',
+      object: { ...refundPayload.object, status: 'canceled' },
+    });
+
+    expect(res.status).toBe(200);
+    expect(applyRefundFromCallback).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderId: 42,
+        refundId: 'rfd_zzz',
+        amount: 1000,
+        rawStatus: 'canceled',
+        source: 'yookassa_callback',
+      }),
+    );
   });
 
   it('returns 400 on a refund with non-succeeded status (callback rejected)', async () => {
@@ -242,6 +269,18 @@ describe('POST /api/checkout/callback', () => {
 
     expect(res.status).toBe(400);
     expect((await res.json()).error).toMatch(/unsupported refund status/i);
+    expect(applyRefundFromCallback).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 on an unsupported refund event', async () => {
+    const res = await post({
+      ...refundPayload,
+      event: 'refund.created',
+      object: { ...refundPayload.object, status: 'pending' },
+    });
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/unsupported refund event/i);
     expect(applyRefundFromCallback).not.toHaveBeenCalled();
   });
 });
