@@ -78,10 +78,32 @@ const parseAmount = (value: string) => {
   return Math.round(amount * 100);
 };
 
+// YooKassa documents two terminal refund events; both go through the same
+// idempotent upsert flow in applyRefundFromCallback. We map them by the
+// event name here rather than the inner object.status so a stray pending
+// status on a 'refund.succeeded' notification (which YooKassa promises
+// never to send, but still) doesn't slip into the SUCCEEDED branch.
+const SUPPORTED_REFUND_EVENTS = {
+  'refund.succeeded': 'succeeded',
+  'refund.canceled': 'canceled',
+} as const;
+
+const isSupportedRefundEvent = (
+  event: string,
+): event is keyof typeof SUPPORTED_REFUND_EVENTS => event in SUPPORTED_REFUND_EVENTS;
+
 const handleRefundCallback = async (payload: RefundCallbackData) => {
   const refund = payload.object;
 
-  if (refund.status !== 'succeeded') {
+  if (!isSupportedRefundEvent(payload.event)) {
+    return NextResponse.json(
+      { error: 'Unsupported refund event' },
+      { status: 400 }
+    );
+  }
+
+  const expectedStatus = SUPPORTED_REFUND_EVENTS[payload.event];
+  if (refund.status !== expectedStatus) {
     return NextResponse.json(
       { error: 'Unsupported refund status' },
       { status: 400 }
@@ -97,15 +119,22 @@ const handleRefundCallback = async (payload: RefundCallbackData) => {
   }
 
   const amountMinor = parseAmount(refund.amount.value);
-  const amountRubles =
-    amountMinor !== null ? Math.round(amountMinor) / 100 : null;
+  if (amountMinor === null) {
+    return NextResponse.json(
+      { error: 'Invalid refund amount' },
+      { status: 400 }
+    );
+  }
+  const amountRubles = Math.round(amountMinor / 100);
 
   await applyRefundFromCallback({
     orderId: order.id,
+    totalAmount: order.totalAmount,
     previousFulfillmentStatus: order.fulfillmentStatus,
     refundId: refund.id,
     paymentId: refund.payment_id,
     amount: amountRubles,
+    rawStatus: refund.status,
     source: 'yookassa_callback',
   });
 
@@ -120,7 +149,8 @@ export async function POST(req: NextRequest) {
       if (
         isRecord(payload) &&
         payload.type === 'notification' &&
-        payload.event === 'refund.succeeded'
+        typeof payload.event === 'string' &&
+        payload.event.startsWith('refund.')
       ) {
         if (!isRefundCallbackData(payload)) {
           return NextResponse.json(
