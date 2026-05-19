@@ -33,6 +33,8 @@ model User {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([role, createdAt(sort: Desc)])
 }
 
 model Category {
@@ -161,9 +163,9 @@ model Order {
   promoId        Int?
   promoCode      String?
 
-  token       String
-  status      OrderStatus
-  paymentId   String?
+  token     String
+  status    OrderStatus
+  paymentId String?
 
   fulfillmentStatus OrderFulfillmentStatus @default(NEW)
   adminNote         String?
@@ -181,6 +183,9 @@ model Order {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([userId])
 }
 
 model OrderEvent {
@@ -189,9 +194,9 @@ model OrderEvent {
   order   Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
   orderId Int
 
-  kind        OrderEventKind
-  payload     Json?
-  actorEmail  String?
+  kind       OrderEventKind
+  payload    Json?
+  actorEmail String?
 
   createdAt DateTime @default(now())
 
@@ -246,9 +251,9 @@ model StoryItem {
 model Promo {
   id Int @id @default(autoincrement())
 
-  code           String    @unique
-  kind           PromoKind
-  valueOff       Int       @default(0)
+  code     String    @unique
+  kind     PromoKind
+  valueOff Int       @default(0)
 
   minOrderAmount Int?
   maxDiscount    Int?
