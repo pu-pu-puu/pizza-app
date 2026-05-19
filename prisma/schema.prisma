@@ -179,6 +179,7 @@ model Order {
   comment  String?
 
   events     OrderEvent[]
+  refunds    Refund[]
   redemption PromoRedemption?
 
   createdAt DateTime @default(now())
@@ -186,6 +187,33 @@ model Order {
 
   @@index([status, createdAt(sort: Desc)])
   @@index([userId])
+}
+
+model Refund {
+  id Int @id @default(autoincrement())
+
+  order   Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId Int
+
+  // Refund amount in rubles, matches Order.totalAmount units. Always positive.
+  amount Int
+
+  // YooKassa refund id from POST /v3/refunds; unique so webhook upserts are safe.
+  yookassaRefundId String @unique
+
+  status            RefundStatus @default(PENDING)
+  reason            String?
+  // Email of the admin who initiated the refund. NULL when YooKassa applied the
+  // refund outside our admin UI (e.g., manual refund in YooKassa dashboard) and
+  // we discovered it via the webhook or the reconciliation cron.
+  createdBy         String?
+  webhookReceivedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId, createdAt])
+  @@index([status, createdAt])
 }
 
 model OrderEvent {
@@ -326,6 +354,12 @@ enum OrderEventKind {
   FULFILLMENT_STATUS_CHANGED
   NOTE
   OTHER
+}
+
+enum RefundStatus {
+  PENDING
+  SUCCEEDED
+  CANCELLED
 }
 
 enum UserRole {
