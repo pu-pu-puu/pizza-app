@@ -105,7 +105,11 @@ export const findPizzas = async (params: GetSearchParams) => {
   const where = buildProductWhere(params, now);
   const include = buildProductInclude(params);
 
-  const [categories, products, totalProducts] = await prisma.$transaction([
+  // The Neon HTTP adapter does not support transactions of any kind —
+  // both $transaction(async tx => …) and $transaction([…]) throw
+  // "Transactions are not supported in HTTP mode". Run the three
+  // independent queries in parallel with Promise.all instead.
+  const [categories, products, totalProducts] = await Promise.all([
     prisma.category.findMany({
       orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
     }),
