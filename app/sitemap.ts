@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next';
 
+import { logger } from '@/lib/logger';
 import { prisma } from '@/prisma/prisma-client';
 
 export const revalidate = 3600;
@@ -9,13 +10,18 @@ const getSiteUrl = () =>
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = getSiteUrl();
-  const products = process.env.POSTGRES_URL
-    ? await prisma.product.findMany({
-        where: { active: true },
-        select: { id: true, updatedAt: true },
-        orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
-      })
-    : [];
+  let products: { id: number; updatedAt: Date }[] = [];
+
+  try {
+    products = await prisma.product.findMany({
+      where: { active: true },
+      select: { id: true, updatedAt: true },
+      orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+    });
+  } catch (error) {
+    logger.warn('sitemap_products_unavailable', { error });
+    products = [];
+  }
 
   return [
     {
