@@ -1,6 +1,6 @@
 # pizza-app
 
-Customer-facing storefront for a Dodo-Pizza-style pizzeria — Next.js 14 (App Router) + Prisma 5 + Neon Postgres + NextAuth (Credentials + GitHub + Google) + YooKassa.
+Customer-facing storefront for a Dodo-Pizza-style pizzeria — Next.js 14 (App Router) + Prisma 6 + Neon Postgres (HTTP adapter) + NextAuth (Credentials + GitHub + Google + Phone OTP) + YooKassa.
 
 Companion to the admin panel [`pizza-admin`](https://github.com/pu-pu-puu/pizza-admin). **Both repos share the same Neon Postgres DB and the same `prisma/schema.prisma`** — any schema change affects both.
 
@@ -42,9 +42,11 @@ npm run prisma:seed      # categories/ingredients/products/test users
 
 Test users created by the seed: `user@test.ru` (USER) and `admin@test.ru` (ADMIN). Default password is `111111`.
 
-### Prisma client differences
+### Prisma client
 
-The storefront uses **Prisma 5 + the default TCP client** ([`prisma/prisma-client.ts`](./prisma/prisma-client.ts) is a basic singleton). The admin uses **Prisma 6 + the Neon HTTP adapter**, which doesn't support interactive transactions. Don't blindly copy `prisma-client.ts` between repos.
+Both repos use **Prisma 6 + the Neon HTTP adapter** (`@prisma/adapter-neon`). The Neon HTTP adapter does **not** support transactions of any kind: both `prisma.$transaction(async tx => …)` and `prisma.$transaction([...])` throw `Transactions are not supported in HTTP mode` at runtime. Issue multiple writes as plain sequential `await prisma.x.update(...)` calls.
+
+[`prisma/prisma-client.ts`](./prisma/prisma-client.ts) wraps the client with a fetch timeout (`NEON_FETCH_TIMEOUT_MS`, default 4s) and a retry-on-transient-error layer (`ECONNRESET`, `fetch failed`, `AbortError`, etc.). Do not bypass it by importing `PrismaClient` directly.
 
 ## Commands
 

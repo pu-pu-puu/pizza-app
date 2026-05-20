@@ -4,7 +4,7 @@ Customer-facing storefront for a Dodo-Pizza-style pizzeria, written in Next.js 1
 
 ## Stack
 - Next.js 14, React 18, TypeScript 5
-- Prisma 5 + Neon (Postgres) — pooled `POSTGRES_URL`, direct `POSTGRES_URL_NON_POOLING`
+- Prisma 6 + Neon HTTP adapter (`@prisma/adapter-neon` → `PrismaNeonHTTP`) — pooled `POSTGRES_URL`, direct `POSTGRES_URL_NON_POOLING`. See the timeout + retry wrapper in `prisma/prisma-client.ts`.
 - NextAuth v4: Credentials, GitHub, Google providers
 - Zustand for client state (cart, category)
 - Tailwind + Radix UI primitives + `lucide-react`
@@ -22,7 +22,7 @@ Customer-facing storefront for a Dodo-Pizza-style pizzeria, written in Next.js 1
 - `services/dto/` — DTO types
 - `store/` — Zustand stores (cart, category)
 - `lib/` — pure helpers (price calc, cart enrichment, payment creation, email send)
-- `prisma/` — `schema.prisma`, `seed.ts`, `prisma-client.ts` (basic singleton, NOT the HTTP-adapter version used in pizza-admin)
+- `prisma/` — `schema.prisma`, `seed.ts`, `prisma-client.ts` (Neon HTTP adapter with a fetch-timeout + retry-on-transient-error wrapper; same adapter as pizza-admin)
 - `constants/` — auth options, checkout schema, pizza option catalogs
 - `components/` — `ui/` (shadcn primitives), `shared/` (app-specific)
 - `@types/` — ambient TS declarations (e.g. YooKassa callback shape)
@@ -65,7 +65,8 @@ Local dev expects a `.env` at the repo root (gitignored). Required keys:
 
 ## Notes for AI assistants
 - Do **not** modify `prisma/schema.prisma` without the user's explicit go-ahead — schema changes affect both repos and the live Neon DB.
-- The seed script and Prisma version differ between this repo and pizza-admin (Prisma 5 here, Prisma 6 there with HTTP Neon adapter). Don't blindly copy `prisma-client.ts` between them.
+- Both this repo and pizza-admin are on **Prisma 6 + Neon HTTP adapter**. Interactive transactions (`prisma.$transaction(async tx => …)`) and batched array transactions (`prisma.$transaction([...])`) are **not supported** by the Neon HTTP adapter — both throw `Transactions are not supported in HTTP mode` at runtime. Issue multiple writes as plain sequential `await prisma.x.update(...)` calls (see `app/api/cart/route.ts` + `lib/order-events.ts` for the established pattern).
+- `prisma/prisma-client.ts` has a global retry wrapper for transient network errors (`ECONNRESET`, `fetch failed`, `AbortError`, etc.) — do not bypass it by importing `PrismaClient` directly.
 - Payments are YooKassa, NOT Stripe — don't suggest Stripe-specific patterns.
 - `react-dadata` is Russia-only address autocomplete; not relevant for non-RU UX work.
 - `app/api/checkout/callback/route.ts` is the YooKassa webhook — its body shape lives in `@types/yookassa.d.ts`.
