@@ -1,5 +1,5 @@
 import { prisma } from '@/prisma/prisma-client';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 export interface GetSearchParams {
   query?: string;
@@ -9,68 +9,20 @@ export interface GetSearchParams {
   ingredients?: string;
   priceFrom?: string;
   priceTo?: string;
+  page?: string;
+}
+
+export const CATALOG_PAGE_SIZE = 24;
+
+export interface CatalogPaginationState {
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
 }
 
 const DEFAULT_MIN_PRICE = 0;
-const CATEGORIES_CACHE_DURATION_MS = 15000;
-
-const buildCategoriesQuery = (now: Date) =>
-  ({
-    include: {
-      products: {
-        where: {
-          active: true,
-          OR: [{ stopUntil: null }, { stopUntil: { lte: now } }],
-        },
-        orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
-        include: {
-          ingredients: true,
-          items: {
-            orderBy: {
-              price: 'asc',
-            },
-          },
-        },
-      },
-    },
-    orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
-  }) satisfies Prisma.CategoryFindManyArgs;
-
-type CategoriesQuery = ReturnType<typeof buildCategoriesQuery>;
-
-type CategoryWithProducts = Prisma.CategoryGetPayload<CategoriesQuery>;
-
-let cachedCategories:
-  | {
-      data: CategoryWithProducts[];
-      expiry: number;
-    }
-  | undefined;
-
-const getCategories = async () => {
-  const now = Date.now();
-
-  if (cachedCategories && cachedCategories.expiry > now) {
-    return cachedCategories.data;
-  }
-
-  try {
-    const data = await prisma.category.findMany(buildCategoriesQuery(new Date(now)));
-    cachedCategories = {
-      data,
-      expiry: now + CATEGORIES_CACHE_DURATION_MS,
-    };
-
-    return data;
-  } catch (error) {
-    if (cachedCategories) {
-      cachedCategories.expiry = now + 5000;
-      return cachedCategories.data;
-    }
-
-    throw error;
-  }
-};
+const FIRST_PAGE = 1;
 
 const parseNumberList = (value?: string) => {
   const values = value
@@ -81,46 +33,114 @@ const parseNumberList = (value?: string) => {
   return values?.length ? values : undefined;
 };
 
-export const findPizzas = async (params: GetSearchParams) => {
+const parsePage = (value?: string) => {
+  const page = Number(value);
+
+  return Number.isInteger(page) && page > FIRST_PAGE ? page : FIRST_PAGE;
+};
+
+const buildProductWhere = (params: GetSearchParams, now: Date) => {
   const sizes = parseNumberList(params.sizes);
   const pizzaTypes = parseNumberList(params.pizzaTypes);
-  const ingredientsIdArr = parseNumberList(params.ingredients);
-
+  const ingredients = parseNumberList(params.ingredients);
   const minPrice = Number(params.priceFrom) || DEFAULT_MIN_PRICE;
   const maxPrice = Number(params.priceTo) || undefined;
 
-  const categories = await getCategories();
+  const productItemsWhere: Prisma.ProductItemWhereInput = {
+    price: {
+      gte: minPrice,
+      ...(maxPrice !== undefined ? { lte: maxPrice } : {}),
+    },
+    ...(sizes?.length ? { size: { in: sizes } } : {}),
+    ...(pizzaTypes?.length ? { pizzaType: { in: pizzaTypes } } : {}),
+  };
 
-  return categories.map((category) => ({
-    ...category,
-    products: category.products
-      .map((product) => {
-        const matchesIngredients =
-          !ingredientsIdArr?.length ||
-          product.ingredients.some((ingredient) =>
-            ingredientsIdArr.includes(ingredient.id),
-          );
+  return {
+    active: true,
+    OR: [{ stopUntil: null }, { stopUntil: { lte: now } }],
+    ...(params.query
+      ? { name: { contains: params.query, mode: Prisma.QueryMode.insensitive } }
+      : {}),
+    ...(ingredients?.length
+      ? { ingredients: { some: { id: { in: ingredients } } } }
+      : {}),
+    items: { some: productItemsWhere },
+  } satisfies Prisma.ProductWhereInput;
+};
 
-        return {
-          ...product,
-          items: matchesIngredients
-            ? product.items.filter((item) => {
-                const matchesPrice =
-                  item.price >= minPrice &&
-                  (maxPrice === undefined || item.price <= maxPrice);
-                const matchesSize =
-                  !sizes?.length ||
-                  (item.size !== null && sizes.includes(item.size));
-                const matchesPizzaType =
-                  !pizzaTypes?.length ||
-                  (item.pizzaType !== null &&
-                    pizzaTypes.includes(item.pizzaType));
+const buildProductInclude = (params: GetSearchParams) => {
+  const sizes = parseNumberList(params.sizes);
+  const pizzaTypes = parseNumberList(params.pizzaTypes);
+  const minPrice = Number(params.priceFrom) || DEFAULT_MIN_PRICE;
+  const maxPrice = Number(params.priceTo) || undefined;
 
-                return matchesPrice && matchesSize && matchesPizzaType;
-              })
-            : [],
-        };
-      })
-      .filter((product) => product.items.length > 0),
-  }));
+  return {
+    ingredients: true,
+    items: {
+      where: {
+        price: {
+          gte: minPrice,
+          ...(maxPrice !== undefined ? { lte: maxPrice } : {}),
+        },
+        ...(sizes?.length ? { size: { in: sizes } } : {}),
+        ...(pizzaTypes?.length ? { pizzaType: { in: pizzaTypes } } : {}),
+      },
+      orderBy: { price: 'asc' },
+    },
+  } satisfies Prisma.ProductInclude;
+};
+
+const buildProductOrderBy = () =>
+  [
+    { category: { sortOrder: Prisma.SortOrder.asc } },
+    { categoryId: Prisma.SortOrder.asc },
+    { sortOrder: Prisma.SortOrder.asc },
+    { id: Prisma.SortOrder.asc },
+  ] satisfies Prisma.ProductOrderByWithRelationInput[];
+
+export const findPizzas = async (params: GetSearchParams) => {
+  const now = new Date();
+  const page = parsePage(params.page);
+  const skip = (page - FIRST_PAGE) * CATALOG_PAGE_SIZE;
+  const where = buildProductWhere(params, now);
+  const include = buildProductInclude(params);
+
+  const [categories, products, totalProducts] = await prisma.$transaction([
+    prisma.category.findMany({
+      orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+    }),
+    prisma.product.findMany({
+      where,
+      include,
+      orderBy: buildProductOrderBy(),
+      skip,
+      take: CATALOG_PAGE_SIZE,
+    }),
+    prisma.product.count({ where }),
+  ]);
+
+  const productsByCategory = new Map<number, typeof products>();
+
+  for (const product of products) {
+    productsByCategory.set(product.categoryId, [
+      ...(productsByCategory.get(product.categoryId) ?? []),
+      product,
+    ]);
+  }
+
+  return {
+    categories: categories.map((category) => ({
+      ...category,
+      products: productsByCategory.get(category.id) ?? [],
+    })),
+    pagination: {
+      page,
+      pageSize: CATALOG_PAGE_SIZE,
+      totalItems: totalProducts,
+      totalPages: Math.max(
+        FIRST_PAGE,
+        Math.ceil(totalProducts / CATALOG_PAGE_SIZE),
+      ),
+    },
+  };
 };

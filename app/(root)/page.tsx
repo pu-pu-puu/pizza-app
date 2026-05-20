@@ -5,6 +5,7 @@ import {
   Stories,
   Title,
   TopBar,
+  CatalogPagination,
 } from '@/components/shared';
 import { findPizzas } from '@/lib';
 import { GetSearchParams } from '@/lib/find-pizzas';
@@ -17,7 +18,7 @@ export default async function Home({
 }: {
   searchParams: GetSearchParams;
 }) {
-  const categories = await findPizzas(searchParams);
+  const { categories, pagination } = await findPizzas(searchParams);
 
   return (
     <>
@@ -27,7 +28,7 @@ export default async function Home({
 
       <TopBar
         categories={categories.filter(
-          (category) => category.products.length > 0
+          (category) => category.products.length > 0,
         )}
       />
 
@@ -50,9 +51,11 @@ export default async function Home({
                       categoryId={category.id}
                       items={category.products}
                     />
-                  )
+                  ),
               )}
             </div>
+
+            <CatalogPagination pagination={pagination} />
           </div>
         </div>
       </Container>

@@ -4,7 +4,7 @@ Customer-facing storefront for a Dodo-Pizza-style pizzeria, written in Next.js 1
 
 ## Stack
 - Next.js 14, React 18, TypeScript 5
-- Prisma 5 + Neon (Postgres) — pooled `POSTGRES_URL`, direct `POSTGRES_URL_NON_POOLING`
+- Prisma 6 + Neon HTTP adapter (Postgres) — pooled `POSTGRES_URL`, direct `POSTGRES_URL_NON_POOLING`
 - NextAuth v4: Credentials, GitHub, Google providers
 - Zustand for client state (cart, category)
 - Tailwind + Radix UI primitives + `lucide-react`
@@ -22,7 +22,7 @@ Customer-facing storefront for a Dodo-Pizza-style pizzeria, written in Next.js 1
 - `services/dto/` — DTO types
 - `store/` — Zustand stores (cart, category)
 - `lib/` — pure helpers (price calc, cart enrichment, payment creation, email send)
-- `prisma/` — `schema.prisma`, `seed.ts`, `prisma-client.ts` (basic singleton, NOT the HTTP-adapter version used in pizza-admin)
+- `prisma/` — `schema.prisma`, `seed.ts`, `prisma-client.ts` (Prisma 6 singleton with Neon HTTP adapter when pointed at Neon)
 - `constants/` — auth options, checkout schema, pizza option catalogs
 - `components/` — `ui/` (shadcn primitives), `shared/` (app-specific)
 - `@types/` — ambient TS declarations (e.g. YooKassa callback shape)
@@ -65,7 +65,7 @@ Local dev expects a `.env` at the repo root (gitignored). Required keys:
 
 ## Notes for AI assistants
 - Do **not** modify `prisma/schema.prisma` without the user's explicit go-ahead — schema changes affect both repos and the live Neon DB.
-- The seed script and Prisma version differ between this repo and pizza-admin (Prisma 5 here, Prisma 6 there with HTTP Neon adapter). Don't blindly copy `prisma-client.ts` between them.
+- This repo uses Prisma 6 with the Neon HTTP adapter when pointed at Neon. The adapter does not support interactive transactions; avoid `prisma.$transaction(async tx => ...)` and nested relation writes that Prisma wraps in interactive transactions.
 - Payments are YooKassa, NOT Stripe — don't suggest Stripe-specific patterns.
 - `react-dadata` is Russia-only address autocomplete; not relevant for non-RU UX work.
 - `app/api/checkout/callback/route.ts` is the YooKassa webhook — its body shape lives in `@types/yookassa.d.ts`.

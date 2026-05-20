@@ -42,11 +42,19 @@ vi.mock('@/prisma/prisma-client', () => ({
     },
     cartItem: {
       findFirst: vi.fn(),
+      findMany: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
     },
     productItem: {
       findUnique: vi.fn(),
+    },
+    category: {
+      findMany: vi.fn(),
+    },
+    product: {
+      findMany: vi.fn(),
+      count: vi.fn(),
     },
     promo: {
       findUnique: vi.fn(),
@@ -60,6 +68,7 @@ vi.mock('@/prisma/prisma-client', () => ({
     },
     $queryRaw: vi.fn(),
     $executeRaw: vi.fn(),
+    $transaction: vi.fn((queries) => Promise.all(queries)),
   },
 }));
 
