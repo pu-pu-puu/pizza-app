@@ -15,10 +15,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang='en'>
-      <head>
-        <link data-rh='true' rel='icon' href='/logo.png' />
-      </head>
+    <html lang='ru'>
+      <head />
       <body className={nunito.className}>
         <Providers>{children}</Providers>
       </body>

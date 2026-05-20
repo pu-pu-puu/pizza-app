@@ -134,7 +134,13 @@ export async function POST(req: NextRequest) {
       const updatedUserCart = await updateCartTotalAmount(token);
 
       const resp = NextResponse.json(updatedUserCart);
-      resp.cookies.set('cartToken', token);
+      resp.cookies.set('cartToken', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 30,
+        path: '/',
+      });
       return resp;
     } catch (error) {
       logger.error('cart_post_failed', error);
