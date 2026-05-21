@@ -1,6 +1,6 @@
 # pizza-app
 
-Customer-facing storefront for a Dodo-Pizza-style pizzeria — Next.js 14 (App Router) + Prisma 5 + Neon Postgres + NextAuth (Credentials + GitHub + Google) + YooKassa.
+Customer-facing storefront for a Dodo-Pizza-style pizzeria — Next.js 14 (App Router) + Prisma 6 + Neon Postgres via the Neon HTTP adapter + NextAuth (Credentials + GitHub + Google) + YooKassa.
 
 Companion to the admin panel [`pizza-admin`](https://github.com/pu-pu-puu/pizza-admin). **Both repos share the same Neon Postgres DB and the same `prisma/schema.prisma`** — any schema change affects both.
 
@@ -44,7 +44,7 @@ Test users created by the seed: `user@test.ru` (USER) and `admin@test.ru` (ADMIN
 
 ### Prisma client differences
 
-The storefront uses **Prisma 5 + the default TCP client** ([`prisma/prisma-client.ts`](./prisma/prisma-client.ts) is a basic singleton). The admin uses **Prisma 6 + the Neon HTTP adapter**, which doesn't support interactive transactions. Don't blindly copy `prisma-client.ts` between repos.
+The storefront uses **Prisma 6 + the Neon HTTP adapter** in [`prisma/prisma-client.ts`](./prisma/prisma-client.ts) when the configured URL points at Neon. Neon HTTP does not support interactive transactions, so avoid `prisma.$transaction(async tx => ...)` and nested relation writes that Prisma wraps in an interactive transaction. Use single-statement writes, batch-array transactions, or explicit follow-up writes instead.
 
 ## Commands
 

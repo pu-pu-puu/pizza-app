@@ -43,3 +43,4 @@ export * from './email-temapltes';
 export * from './checkout';
 export * from './form';
 export * from './modals';
+export { CatalogPagination } from './catalog-pagination';
