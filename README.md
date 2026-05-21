@@ -42,9 +42,11 @@ npm run prisma:seed      # categories/ingredients/products/test users
 
 Test users created by the seed: `user@test.ru` (USER) and `admin@test.ru` (ADMIN). Default password is `111111`.
 
-### Prisma client differences
+### Prisma client
 
-The storefront uses **Prisma 6 + the Neon HTTP adapter** in [`prisma/prisma-client.ts`](./prisma/prisma-client.ts) when the configured URL points at Neon. Neon HTTP does not support interactive transactions, so avoid `prisma.$transaction(async tx => ...)` and nested relation writes that Prisma wraps in an interactive transaction. Use single-statement writes, batch-array transactions, or explicit follow-up writes instead.
+Both repos use **Prisma 6 + the Neon HTTP adapter** (`@prisma/adapter-neon`). The Neon HTTP adapter does **not** support transactions of any kind: both `prisma.$transaction(async tx => …)` and `prisma.$transaction([...])` throw `Transactions are not supported in HTTP mode` at runtime. Issue multiple writes as plain sequential `await prisma.x.update(...)` calls (see [`app/api/cart/route.ts`](./app/api/cart/route.ts) and [`lib/order-events.ts`](./lib/order-events.ts) for the established pattern).
+
+[`prisma/prisma-client.ts`](./prisma/prisma-client.ts) wraps the client with a fetch timeout (`NEON_FETCH_TIMEOUT_MS`, default `4000`) and a retry-on-transient-error layer (`ECONNRESET`, `ETIMEDOUT`, `EAI_AGAIN`, `fetch failed`, `AbortError`, etc.). Do not bypass it by importing `PrismaClient` directly.
 
 ## Commands
 
