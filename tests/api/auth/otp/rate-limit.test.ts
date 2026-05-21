@@ -26,6 +26,7 @@ describe('rate-limit helper (pizza-app)', () => {
     delete process.env.KV_REST_API_TOKEN;
     delete process.env.UPSTASH_REDIS_REST_URL;
     delete process.env.UPSTASH_REDIS_REST_TOKEN;
+    delete process.env.RATE_LIMIT_FAIL_CLOSED;
     limitMock.mockReset();
   });
 
@@ -87,6 +88,44 @@ describe('rate-limit helper (pizza-app)', () => {
 
     const result = await checkOtpSendRateLimit('1.2.3.4');
     expect(result.success).toBe(true);
+  });
+
+  it('fails closed (success=false) when Upstash throws and RATE_LIMIT_FAIL_CLOSED=true in production', async () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    Object.defineProperty(process.env, 'NODE_ENV', { value: 'production', configurable: true });
+    process.env.RATE_LIMIT_FAIL_CLOSED = 'true';
+    process.env.UPSTASH_REDIS_REST_URL = 'https://upstash.example.com';
+    process.env.UPSTASH_REDIS_REST_TOKEN = 'upstash-token';
+    limitMock.mockRejectedValue(new Error('upstream down'));
+
+    try {
+      const { checkOtpSendRateLimit, _resetForTests } = await loadModule();
+      _resetForTests();
+
+      const result = await checkOtpSendRateLimit('1.2.3.4');
+      expect(result.success).toBe(false);
+      expect(result.remaining).toBe(0);
+      expect(result.reset).toBeGreaterThan(Date.now());
+    } finally {
+      Object.defineProperty(process.env, 'NODE_ENV', { value: originalNodeEnv, configurable: true });
+    }
+  });
+
+  it('fails closed (success=false) when Upstash is not configured and RATE_LIMIT_FAIL_CLOSED=true in production', async () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    Object.defineProperty(process.env, 'NODE_ENV', { value: 'production', configurable: true });
+    process.env.RATE_LIMIT_FAIL_CLOSED = 'true';
+
+    try {
+      const { checkOtpSendRateLimit, _resetForTests } = await loadModule();
+      _resetForTests();
+
+      const result = await checkOtpSendRateLimit('1.2.3.4');
+      expect(result.success).toBe(false);
+      expect(limitMock).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(process.env, 'NODE_ENV', { value: originalNodeEnv, configurable: true });
+    }
   });
 
   it('extractClientIp returns first hop of x-forwarded-for, falls back to x-real-ip, then "unknown"', async () => {

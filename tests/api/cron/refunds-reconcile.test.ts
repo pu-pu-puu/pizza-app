@@ -67,6 +67,16 @@ describe('GET /api/cron/refunds-reconcile', () => {
     );
     expect(wrong.status).toBe(401);
 
+    // Same-length wrong header — must still be rejected by the
+    // constant-time comparison, not silently accepted because the length
+    // matches.
+    const sameLengthWrong = `Bearer ${'x'.repeat(CRON_SECRET.length)}`;
+    expect(sameLengthWrong.length).toBe(`Bearer ${CRON_SECRET}`.length);
+    const wrongSameLength = await GET(
+      buildRequest({ authorization: sameLengthWrong }),
+    );
+    expect(wrongSameLength.status).toBe(401);
+
     expect(prisma.refund.findMany).not.toHaveBeenCalled();
   });
 
