@@ -481,6 +481,7 @@ export async function registerUser(body: Prisma.UserCreateInput) {
         'Next Pizza / 📝 Подтверждение регистрации',
         VerificationUserTemplate({
           code,
+          origin: getRequestOrigin(),
         })
       );
     } catch (err) {
