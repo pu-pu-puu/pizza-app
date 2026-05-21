@@ -1,6 +1,6 @@
 # pizza-app
 
-Customer-facing storefront for a Dodo-Pizza-style pizzeria, written in Next.js 14 (App Router) with TypeScript. Companion to the separate admin panel at https://github.com/cloudd3r/pizza-admin (same DB).
+Customer-facing storefront for a Dodo-Pizza-style pizzeria, written in Next.js 14 (App Router) with TypeScript. Companion to the separate admin panel at https://github.com/pu-pu-puu/pizza-admin (same DB).
 
 ## Stack
 - Next.js 14, React 18, TypeScript 5
