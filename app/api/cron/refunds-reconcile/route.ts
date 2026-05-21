@@ -1,3 +1,5 @@
+import { timingSafeEqual } from 'crypto';
+
 import {
   OrderEventKind,
   OrderFulfillmentStatus,
@@ -155,7 +157,22 @@ export async function GET(req: NextRequest) {
     }
 
     const authHeader = req.headers.get('authorization') ?? '';
-    if (authHeader !== `Bearer ${secret}`) {
+    const expected = `Bearer ${secret}`;
+    // Length check first to avoid timingSafeEqual's same-length requirement
+    // throwing; the early exit here doesn't leak more than the header length,
+    // which an attacker already controls.
+    let authorized = false;
+    if (authHeader.length === expected.length) {
+      try {
+        authorized = timingSafeEqual(
+          Buffer.from(authHeader),
+          Buffer.from(expected),
+        );
+      } catch {
+        authorized = false;
+      }
+    }
+    if (!authorized) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

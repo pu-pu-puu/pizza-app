@@ -10,6 +10,23 @@ export interface RateLimitResult {
 
 const NOOP_RESULT: RateLimitResult = { success: true, remaining: -1, reset: 0 };
 
+// Default behaviour when Upstash is unreachable or unconfigured is fail-open
+// (NOOP_RESULT) — the rate limiter is a defence-in-depth layer on top of
+// per-phone DB limits, and failing closed for the OTP flows would deny logins
+// during a Redis outage. In production, opt in to fail-closed by setting
+// RATE_LIMIT_FAIL_CLOSED=true; tests stay fail-open because they don't set
+// NODE_ENV=production.
+function isFailClosed(): boolean {
+  return (
+    process.env.NODE_ENV === 'production' &&
+    process.env.RATE_LIMIT_FAIL_CLOSED === 'true'
+  );
+}
+
+function failClosedResult(): RateLimitResult {
+  return { success: false, remaining: 0, reset: Date.now() + 60_000 };
+}
+
 type Window = `${number} ${'s' | 'ms' | 'm' | 'h' | 'd'}`;
 
 function getEnv(primary: string, fallback: string): string | undefined {
@@ -50,7 +67,13 @@ async function check(
   key: string,
 ): Promise<RateLimitResult> {
   const limiter = getLimiter(name, limit, window);
-  if (!limiter) return NOOP_RESULT;
+  if (!limiter) {
+    if (isFailClosed()) {
+      logger.warn('rate_limit_unavailable_fail_closed', { limiter: name, key });
+      return failClosedResult();
+    }
+    return NOOP_RESULT;
+  }
 
   try {
     const result = await limiter.limit(key);
@@ -65,6 +88,9 @@ async function check(
     return { success: result.success, remaining: result.remaining, reset: result.reset };
   } catch (err) {
     logger.error('rate_limit_error', err, { limiter: name, key });
+    if (isFailClosed()) {
+      return failClosedResult();
+    }
     return NOOP_RESULT;
   }
 }
